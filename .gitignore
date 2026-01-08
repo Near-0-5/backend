@@ -1,0 +1,5 @@
+.python-version
+.env
+.venv/
+envs/
+__pycache__/

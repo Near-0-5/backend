@@ -1,0 +1,64 @@
+services:
+  api:
+    container_name: api
+    build:
+      context: ..
+      dockerfile: docker/DockerFile
+    env_file:
+      - ../envs/.local.env
+    working_dir: /app
+    command: >
+      sh -c "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    networks:
+      - ws
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:14
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pw1234
+      POSTGRES_DB: ozcoding_externship
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ws
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ozcoding_externship"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ws
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  ws:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,25 @@
+set -euo pipefail
+
+MSG_FILE="${1}"
+
+# merge/squash 등 특수 케이스는 건드리지 않기(원하면 조절)
+if [[ "${2-}" == "merge" ]] || [[ "${2-}" == "squash" ]]; then
+  exit 0
+fi
+
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+KEY="$(echo "$BRANCH" | grep -Eo '[A-Z]+-[0-9]+' | head -n 1 || true)"
+
+# 브랜치에 이슈키가 없으면 종료
+if [[ -z "$KEY" ]]; then
+  exit 0
+fi
+
+# 이미 메시지에 있으면 종료
+if grep -qE "\b$KEY\b" "$MSG_FILE"; then
+  exit 0
+fi
+
+# 첫 줄에 [KEY] 프리픽스 붙이기
+# macOS sed 호환 위해 -i '' 사용
+sed -i '' "1s/^/[$KEY] /" "$MSG_FILE" 2>/dev/null || sed -i "1s/^/[$KEY] /" "$MSG_FILE"

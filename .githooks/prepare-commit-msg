@@ -9,7 +9,7 @@ fi
 
 BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
 KEY="$(echo "$BRANCH" | grep -Eo '[A-Za-z]+-[0-9]+' | head -n 1 || true)"
-KEY="${KEY^^}"
+KEY="$(printf '%s' "$KEY" | tr '[:lower:]' '[:upper:]')"
 
 # 브랜치에 이슈키가 없으면 종료
 if [[ -z "$KEY" ]]; then

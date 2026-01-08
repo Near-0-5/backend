@@ -1,5 +1,7 @@
 .python-version
 .env
 .venv/
+.mypy_cache
+.ruff_cache
 envs/
 __pycache__/

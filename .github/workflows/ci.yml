@@ -118,13 +118,12 @@ jobs:
       - name: Create env file (envs/.local.env)
         run: |
           mkdir -p envs
-          cat > envs/.local.env <<'EOF'
-          DJANGO_SETTINGS_MODULE=config.settings.local
-          DJANGO_SECRET_KEY=ozcodingschool06183461JrCodingLab@^242321
+          cat > envs/.local.env <<EOF
+          SECRET_KEY=${{ secrets.APP_SECRET_KEY }}
 
           DB_NAME=near05_db
           DB_USER=postgres
-          DB_PASSWORD=pw1234
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_HOST=127.0.0.1
           DB_PORT=5432
 

@@ -12,7 +12,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ..:/app
     networks:
       - ws
     depends_on:
@@ -20,21 +20,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - django
-    volumes:
-      - ./resources/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
-      - static_volume:/oz_externship/static
-      - media_volume:/oz_externship/media
-    networks:
-      - ws
 
   db:
     image: postgres:14

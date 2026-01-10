@@ -67,7 +67,7 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: pw1234
+          POSTGRES_PASSWORD: password
           POSTGRES_DB: near05_db
           TZ: Asia/Seoul
         options: >-
@@ -123,7 +123,7 @@ jobs:
 
           DB_NAME=near05_db
           DB_USER=postgres
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD=password
           DB_HOST=127.0.0.1
           DB_PORT=5432
 
@@ -137,7 +137,7 @@ jobs:
           # 테스트 실행 시 환경변수를 확실히 주입(앱이 env 파일을 안 읽는 구조여도 안정적으로 동작)
           DB_NAME: near05_db
           DB_USER: postgres
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD: password
           DB_HOST: 127.0.0.1
           DB_PORT: "5432"
           REDIS_HOST: 127.0.0.1
@@ -149,7 +149,7 @@ jobs:
         env:
           DB_NAME: near05_db
           DB_USER: postgres
-          DB_PASSWORD: pw1234
+          DB_PASSWORD: password
           DB_HOST: 127.0.0.1
           DB_PORT: "5432"
           REDIS_HOST: 127.0.0.1

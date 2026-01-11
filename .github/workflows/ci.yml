@@ -161,4 +161,4 @@ jobs:
           REDIS_PORT: "6379"
         run: |
           uv run coverage run -m pytest -q
-          uv run coverage report -m
+          uv run coverage report -m --fail-under=80

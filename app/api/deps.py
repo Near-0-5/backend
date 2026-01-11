@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-from fastapi import Depends
 
 # TODO: JWT 인증 로직이 생기면 여기서 current user dependency를 제공
 def get_current_user():

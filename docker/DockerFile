@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# (선택) 빌드/런타임에 필요한 시스템 패키지
+# 빌드/런타임에 필요한 시스템 패키지
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
   && rm -rf /var/lib/apt/lists/*
@@ -23,5 +23,5 @@ COPY . .
 
 EXPOSE 8000
 
-# FastAPI 실행 (너 엔트리포인트에 맞게 수정)
+# FastAPI 실행
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

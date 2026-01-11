@@ -1,7 +1,9 @@
 .python-version
 .env
 .venv/
+.pytest_cache
 .mypy_cache
 .ruff_cache
 envs/
 __pycache__/
+*.egg-info/

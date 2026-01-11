@@ -67,7 +67,7 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: pw1234
+          POSTGRES_PASSWORD: password
           POSTGRES_DB: near05_db
           TZ: Asia/Seoul
         options: >-
@@ -119,13 +119,14 @@ jobs:
         run: |
           mkdir -p envs
           cat > envs/.local.env <<EOF
-          SECRET_KEY=${{ secrets.APP_SECRET_KEY }}
+          SECRET_KEY=testsecretkey
 
           DB_NAME=near05_db
           DB_USER=postgres
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD=password
           DB_HOST=127.0.0.1
           DB_PORT=5432
+          DB_SCHEME=postgresql
 
           REDIS_HOST=127.0.0.1
           REDIS_PORT=6379
@@ -135,24 +136,27 @@ jobs:
       - name: Pytest
         env:
           # 테스트 실행 시 환경변수를 확실히 주입(앱이 env 파일을 안 읽는 구조여도 안정적으로 동작)
+          SECRET_KEY: testsecretkey
           DB_NAME: near05_db
           DB_USER: postgres
-          DB_PASSWORD: pw1234
+          DB_PASSWORD: password
           DB_HOST: 127.0.0.1
           DB_PORT: "5432"
+          DB_SCHEME: postgresql
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: "6379"
         run: uv run pytest -q
 
       # 커버리지(coverage) 보고
-      # ※ dev dependency에 coverage가 설치되어 있어야 합니다. (예: uv add --dev coverage)
       - name: Coverage (report)
         env:
+          SECRET_KEY: testsecretkey
           DB_NAME: near05_db
           DB_USER: postgres
-          DB_PASSWORD: pw1234
+          DB_PASSWORD: password
           DB_HOST: 127.0.0.1
           DB_PORT: "5432"
+          DB_SCHEME: postgresql
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: "6379"
         run: |

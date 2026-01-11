@@ -1,4 +1,5 @@
 .python-version
+.coverage
 .env
 .venv/
 .pytest_cache

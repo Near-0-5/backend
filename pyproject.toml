@@ -34,3 +34,18 @@ packages = ["app"]
 tortoise_orm = "app.core.tortoise_config.TORTOISE_ORM"
 location = "./migrations"
 src_folder = "./."
+
+[tool.ruff]
+cache-dir = ".cache/ruff"
+
+[tool.mypy]
+cache_dir = ".cache/mypy"
+
+[tool.coverage.run]
+data_file = ".cache/coverage/.coverage"
+
+[tool.coverage.html]
+directory = ".cache/coverage/html"
+
+[tool.coverage.xml]
+output = ".cache/coverage/coverage.xml"

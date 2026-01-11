@@ -13,10 +13,11 @@ mkdir envs
 echo "SECRET_KEY=ozcodingschool0618$$JrCodingLab@^242321
 
 DB_NAME=near05_db
-DB_USER=db
+DB_USER=postgres
 DB_PASSWORD=pw1234
-DB_HOST=db
+DB_HOST=localhost
 DB_PORT=5432
+DB_SCHEME=asyncpg
 
 REDIS_HOST=redis
 REDIS_PORT=6379

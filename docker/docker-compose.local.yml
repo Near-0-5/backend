@@ -27,7 +27,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pw1234
-      POSTGRES_DB: ozcoding_externship
+      POSTGRES_DB: near05_db
       TZ: Asia/Seoul
     ports:
       - "5432:5432"
@@ -36,7 +36,7 @@ services:
     networks:
       - ws
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ozcoding_externship"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d near05_db"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -16,7 +16,7 @@ COPY pyproject.toml uv.lock ./
 
 # prod만 설치할지, dev 포함할지 선택
 # - 배포 이미지면 보통 prod만 설치
-RUN uv sync --locked
+RUN uv sync --locked --no-install-project
 
 # 소스 복사
 COPY . .

@@ -1,11 +1,12 @@
 # 📖 프로젝트 가이드
 
-## 🛠️ 레포 클론 후 바로 실행
+## ⚙️ 레포 클론 후 바로 실행
 ### 1) 가상환경 설정
 ```md
 1. uv 설치: `pip install uv`
 2. 의존성 설치: `uv sync --no-install-project`
 ```
+
 ### 2) envs/.local.env 생성
 ```sh
 mkdir envs
@@ -30,6 +31,7 @@ REDIS_PORT=6379
 2. .githooks 내의 파일에 권한 부여 : `chmod +x .githooks/*`
 3. .githooks가 등록이 됐는지 확인 : `git config --get core.hooksPath`
 ```
+
 ### 4) 도커 빌드
 ```md
 1. 서버 빌드/실행: `docker compose -f docker/docker-compose.local.yml up --build`
@@ -41,7 +43,23 @@ REDIS_PORT=6379
 ```md
 1. docker db만 켜기: `docker compose -f docker/docker-compose.local.yml up -d db`
 2. 마이그레이션 적용: `uv run aerich upgrade`
+
 ```
+---
+
+## 🛠️ CI 통과용 명령어
+
+- ruff-format 적용: `uv run ruff format .`
+
+- ruff-format 검사: `uv run ruff format --check .`
+
+- ruff: `uv run ruff check .`
+
+- mypy: `uv run mypy .`
+
+- pytest: `uv run pytest -q`
+
+- coverage: `uv run coverage report -m --fail-under=0`
 
 ---
 

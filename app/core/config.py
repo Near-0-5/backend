@@ -19,12 +19,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    DB_SCHEME: str = "postgres"
-    DB_HOST: str = "localhost"
-    DB_PORT: int = 5432
-    DB_NAME: str = "near05_db"
-    DB_USER: str = "db"
-    DB_PASSWORD: str = "pw1234"
+    DB_SCHEME: str
+    DB_HOST: str
+    DB_PORT: int
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str
 
     AUTO_SCHEMA: str = "0"  # 개발 초기에만 1로 켜서 generate_schemas를 쓰는 경우에 사용
 

@@ -12,13 +12,13 @@
 
 from fastapi import APIRouter
 
-from app.domains.auth.router import router as auth_router
-from app.domains.users.router import router as users_router
-from app.domains.categories.router import router as categories_router
 from app.domains.artists.router import router as artists_router
-from app.domains.streams.router import router as streams_router
+from app.domains.auth.router import router as auth_router
+from app.domains.categories.router import router as categories_router
 from app.domains.chat.router_ws import router as chat_router
 from app.domains.notifications.router import router as notifications_router
+from app.domains.streams.router import router as streams_router
+from app.domains.users.router import router as users_router
 
 api_router = APIRouter(prefix="/api/v1")
 

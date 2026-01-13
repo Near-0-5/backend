@@ -13,7 +13,7 @@ from __future__ import annotations
 
 
 # TODO: JWT 인증 로직이 생기면 여기서 current user dependency를 제공
-def get_current_user():
+def get_current_user() -> None:
     """현재 로그인 유저를 반환하는 Depends 자리.
 
     구현 예:

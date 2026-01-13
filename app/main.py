@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from tortoise import Tortoise
@@ -25,7 +26,7 @@ logger = logging.getLogger("app")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """서버 시작/종료 훅.
 
     startup(위쪽):
@@ -49,7 +50,7 @@ app.include_router(api_router)
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, bool]:
     """기본 헬스체크.
 
     여기에 넣을 것:

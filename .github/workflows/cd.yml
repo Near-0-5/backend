@@ -15,14 +15,11 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
 
-  # CloudFormation stack
   APP_STACK_NAME: near05-dev-backend
 
-  # App
   APP_NAME: near05-backend
   APP_ENV: dev
 
-  # Container
   CONTAINER_NAME: app
   CONTAINER_PORT: "8000"
   TASK_CPU: "256"
@@ -30,7 +27,6 @@ env:
 
 jobs:
   deploy:
-    # PR close는 merge 아닌 경우도 있으니 merge만 배포
     if: |
       github.event_name != 'pull_request' ||
       (github.event.pull_request.merged == true)
@@ -41,20 +37,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) AWS auth (OIDC -> AssumeRole)
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 2) Tooling (envsubst)
-      - name: Install envsubst
+      - name: Install envsubst + jq
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y gettext-base
+          sudo apt-get install -y gettext-base jq
 
-      # 3) Cleanup broken stack (ROLLBACK_COMPLETE)
       - name: Delete stack if ROLLBACK_COMPLETE
         run: |
           set -euo pipefail
@@ -71,7 +64,6 @@ jobs:
             echo "Deleted."
           fi
 
-      # 4) Deploy CloudFormation (ECR/ECS/Logs/IAM/SG)
       - name: Deploy CloudFormation stack
         run: |
           set -euo pipefail
@@ -89,16 +81,19 @@ jobs:
               ContainerPort="${CONTAINER_PORT}" \
               Cpu="${TASK_CPU}" \
               Memory="${TASK_MEMORY}" \
-              DesiredCount="1"
+              DesiredCount="1" \
+              DbSubnets="${{ secrets.DB_SUBNETS }}" \
+              DbName="${{ secrets.DB_NAME }}" \
+              DbUsername="${{ secrets.DB_USER }}" \
+              DbPassword="${{ secrets.DB_PASSWORD }}" \
+              DbPubliclyAccessible="false"
 
-      # 5) Dump CFN events if failure (debug)
       - name: Dump CloudFormation events on failure
         if: failure()
         run: |
           aws cloudformation describe-stacks --stack-name "${APP_STACK_NAME}" || true
           aws cloudformation describe-stack-events --stack-name "${APP_STACK_NAME}" --max-items 50 || true
 
-      # 6) Read stack outputs -> env vars
       - name: Read CloudFormation outputs
         run: |
           set -euo pipefail
@@ -128,13 +123,17 @@ jobs:
           echo "TASK_ROLE_ARN=$(get TaskRoleArn)" >> $GITHUB_ENV
           echo "LOG_GROUP=$(get LogGroupName)" >> $GITHUB_ENV
 
+          # RDS outputs
+          echo "DB_HOST=$(get DbHost)" >> $GITHUB_ENV
+          echo "DB_PORT=$(get DbPort)" >> $GITHUB_ENV
+          echo "DB_NAME=$(get DbNameOut)" >> $GITHUB_ENV
+          echo "DB_USER=$(get DbUserOut)" >> $GITHUB_ENV
+
           echo "Resolved TASK_FAMILY=${TASK_FAMILY}"
 
-      # 7) Login ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 8) Build & Push image
       - name: Build, tag, and push image to ECR
         run: |
           set -euo pipefail
@@ -147,7 +146,6 @@ jobs:
 
           echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
 
-      # 9) Render task-definition.json from template
       - name: Render task-definition.json (envsubst)
         run: |
           set -euo pipefail
@@ -164,9 +162,19 @@ jobs:
           export TASK_CPU="${TASK_CPU}"
           export TASK_MEMORY="${TASK_MEMORY}"
 
+          # DB env (RDS outputs + GitHub secret password)
+          export DB_SCHEME="postgres"
+          export DB_HOST="${DB_HOST}"
+          export DB_PORT="${DB_PORT}"
+          export DB_NAME="${DB_NAME}"
+          export DB_USER="${DB_USER}"
+          export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+
+          : "${DB_HOST:?DB_HOST is required}"
+          : "${DB_PASSWORD:?DB_PASSWORD is required}"
+
           envsubst < infra/ecs/task-definition.json.tmpl > task-definition.json
 
-      # 10) Deploy to ECS (register new task def + update service)
       - name: Deploy to Amazon ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:

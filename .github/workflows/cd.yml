@@ -1,0 +1,167 @@
+name: CD (ECR + ECS via CloudFormation)
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+    types: [closed]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+
+  # CloudFormation stack
+  APP_STACK_NAME: near05-dev-backend
+
+  # App
+  APP_NAME: near05-backend
+  APP_ENV: dev
+
+  # Container
+  CONTAINER_NAME: app
+  CONTAINER_PORT: "8000"
+  TASK_CPU: "256"
+  TASK_MEMORY: "512"
+
+jobs:
+  deploy:
+    # PR close는 merge 아닌 경우도 있으니 merge만 배포
+    if: |
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.merged == true)
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 1) AWS auth (OIDC -> AssumeRole)
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 2) Tooling (envsubst)
+      - name: Install envsubst
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y gettext-base
+
+      # 3) Cleanup broken stack (ROLLBACK_COMPLETE)
+      - name: Delete stack if ROLLBACK_COMPLETE
+        run: |
+          set -euo pipefail
+
+          STATUS=$(aws cloudformation describe-stacks --stack-name "${APP_STACK_NAME}" \
+            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+
+          echo "Stack status: ${STATUS}"
+
+          if [ "${STATUS}" = "ROLLBACK_COMPLETE" ]; then
+            echo "Deleting stack ${APP_STACK_NAME} (ROLLBACK_COMPLETE)..."
+            aws cloudformation delete-stack --stack-name "${APP_STACK_NAME}"
+            aws cloudformation wait stack-delete-complete --stack-name "${APP_STACK_NAME}"
+            echo "Deleted."
+          fi
+
+      # 4) Deploy CloudFormation (ECR/ECS/Logs/IAM/SG)
+      - name: Deploy CloudFormation stack
+        run: |
+          set -euo pipefail
+
+          aws cloudformation deploy \
+            --stack-name "${APP_STACK_NAME}" \
+            --template-file "infra/cfn/10-ecs-fargate.yml" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              AppName="${APP_NAME}" \
+              Environment="${APP_ENV}" \
+              VpcId="${{ secrets.VPC_ID }}" \
+              PublicSubnets="${{ secrets.PUBLIC_SUBNETS }}" \
+              AssignPublicIp="ENABLED" \
+              ContainerPort="${CONTAINER_PORT}" \
+              Cpu="${TASK_CPU}" \
+              Memory="${TASK_MEMORY}" \
+              DesiredCount="1"
+
+      # 5) Dump CFN events if failure (debug)
+      - name: Dump CloudFormation events on failure
+        if: failure()
+        run: |
+          aws cloudformation describe-stacks --stack-name "${APP_STACK_NAME}" || true
+          aws cloudformation describe-stack-events --stack-name "${APP_STACK_NAME}" --max-items 50 || true
+
+      # 6) Read stack outputs -> env vars
+      - name: Read CloudFormation outputs
+        run: |
+          set -euo pipefail
+
+          OUT=$(aws cloudformation describe-stacks --stack-name "${APP_STACK_NAME}" \
+            --query "Stacks[0].Outputs" --output json)
+
+          echo "$OUT" > outputs.json
+
+          get() {
+            python -c 'import json,sys; outs=json.load(open("outputs.json")); key=sys.argv[1]; print(next(o["OutputValue"] for o in outs if o["OutputKey"]==key))' "$1"
+          }
+
+          echo "ECR_URI=$(get EcrRepositoryUri)" >> $GITHUB_ENV
+          echo "ECR_NAME=$(get EcrRepositoryName)" >> $GITHUB_ENV
+          echo "ECS_CLUSTER=$(get ClusterName)" >> $GITHUB_ENV
+          echo "ECS_SERVICE=$(get ServiceName)" >> $GITHUB_ENV
+          echo "TASK_FAMILY=$(get TaskFamily)" >> $GITHUB_ENV
+          echo "TASK_EXEC_ROLE_ARN=$(get TaskExecutionRoleArn)" >> $GITHUB_ENV
+          echo "TASK_ROLE_ARN=$(get TaskRoleArn)" >> $GITHUB_ENV
+          echo "LOG_GROUP=$(get LogGroupName)" >> $GITHUB_ENV
+
+      # 7) Login ECR
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 8) Build & Push image
+      - name: Build, tag, and push image to ECR
+        run: |
+          set -euo pipefail
+
+          IMAGE_TAG="${GITHUB_SHA::7}"
+          IMAGE_URI="${ECR_URI}:${IMAGE_TAG}"
+
+          docker build -f docker/Dockerfile -t "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+      # 9) Render task-definition.json from template
+      - name: Render task-definition.json (envsubst)
+        run: |
+          set -euo pipefail
+
+          export AWS_REGION="${AWS_REGION}"
+          export IMAGE_URI="${IMAGE_URI}"
+          export TASK_FAMILY="${TASK_FAMILY}"
+          export TASK_EXEC_ROLE_ARN="${TASK_EXEC_ROLE_ARN}"
+          export TASK_ROLE_ARN="${TASK_ROLE_ARN}"
+          export LOG_GROUP="${LOG_GROUP}"
+          export APP_ENV="${APP_ENV}"
+          export CONTAINER_NAME="${CONTAINER_NAME}"
+          export CONTAINER_PORT="${CONTAINER_PORT}"
+          export TASK_CPU="${TASK_CPU}"
+          export TASK_MEMORY="${TASK_MEMORY}"
+
+          envsubst < infra/ecs/task-definition.json.tmpl > task-definition.json
+
+      # 10) Deploy to ECS (register new task def + update service)
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: task-definition.json
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true

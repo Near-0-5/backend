@@ -210,7 +210,7 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       Engine: postgres
-      DBInstanceIdentifier: !Sub "${AppName}-${Environment}-postgres"
+      DBInstanceIdentifier: !Sub "${AWS::StackName}-postgres"
       DBInstanceClass: !Ref DbInstanceClass
       AllocatedStorage: !Ref DbAllocatedStorage
       StorageType: gp3

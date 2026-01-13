@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# 동일 PR에 새 커밋이 올라오면 이전 실행을 취소하여 자원을 절약합니다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     # 코드 품질 검사(린트/포맷/타입체크) job
@@ -19,64 +24,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Python
-        id: setup-python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      # uv 설치 및 기본 캐시 활성화
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          enable-cache: true
+          enable-cache: true # uv 의존성 캐싱 자동 처리
 
-      # uv 다운로드/휠 캐시를 저장하여 의존성 설치 속도를 개선합니다.
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          # uv.lock이 바뀌지 않으면 캐시 재사용
-          key: uv-${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-lock-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            uv-${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-
+      - name: Set up Python
+        run: uv python install 3.12
 
-      # 개발 의존성까지 포함하여 잠금 파일 기준으로 설치합니다.
       - name: Install dependencies
         run: uv sync --dev --locked
 
-      - name: Ruff (lint)
-        run: uv run ruff check .
+      - name: Ruff (lint & format check)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
 
-      - name: Ruff (format check)
-        run: uv run ruff format --check .
-
-      - name: Mypy
+      - name: Mypy (type check)
         run: uv run mypy .
 
-
   test:
-    # DB/Redis가 필요한 테스트를 수행하는 job
+    # CI 단계가 성공해야 테스트를 실행합니다.
+    needs: ci
     runs-on: ubuntu-latest
 
     services:
-      # postgresql db service
       db:
         image: postgres:14
         ports:
           - 5432:5432
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: password
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
           POSTGRES_DB: near05_db
           TZ: Asia/Seoul
         options: >-
           --health-cmd "pg_isready -U postgres -d near05_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
 
-      # redis service
       redis:
         image: redis:7
         ports:
@@ -85,80 +72,46 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
-          --health-retries 10
+          --health-retries 5
+
+    env:
+      # GitHub Secrets에서 가져온 값을 환경변수로 매핑
+      MODE: local
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DB_SCHEME: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: near05_db
+      DB_USER: postgres
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      STREAM_KEY_ENCRYPTION_KEY: ${{ secrets.STREAM_KEY_ENCRYPTION_KEY }}
+      ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123!
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ap-northeast-2
+      S3_RECORDING_BUCKET: my-concert-ivs-recordings
+      AUTO_SCHEMA: "1"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-
-      - name: Set up Python
-        id: setup-python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-lock-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            uv-${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --dev --locked
 
-      # 로컬과 동일하게 env 파일을 생성합니다.
-      # 단, GitHub Actions services는 보통 localhost로 접근하는 것이 안전해서 CI에서는 HOST를 127.0.0.1로 설정합니다.
-      - name: Create env file (envs/.local.env)
+      - name: Run Pytest and Coverage
         run: |
-          mkdir -p envs
-          cat > envs/.local.env <<EOF
-          SECRET_KEY=testsecretkey
-
-          DB_NAME=near05_db
-          DB_USER=postgres
-          DB_PASSWORD=password
-          DB_HOST=127.0.0.1
-          DB_PORT=5432
-          DB_SCHEME=postgresql
-
-          REDIS_HOST=127.0.0.1
-          REDIS_PORT=6379
-          EOF
-
-      # 테스트 실행 (pytest)
-      - name: Pytest
-        env:
-          # 테스트 실행 시 환경변수를 확실히 주입(앱이 env 파일을 안 읽는 구조여도 안정적으로 동작)
-          SECRET_KEY: testsecretkey
-          DB_NAME: near05_db
-          DB_USER: postgres
-          DB_PASSWORD: password
-          DB_HOST: 127.0.0.1
-          DB_PORT: "5432"
-          DB_SCHEME: postgresql
-          REDIS_HOST: 127.0.0.1
-          REDIS_PORT: "6379"
-        run: uv run pytest -q
-
-      # 커버리지(coverage) 보고
-      - name: Coverage (report)
-        env:
-          SECRET_KEY: testsecretkey
-          DB_NAME: near05_db
-          DB_USER: postgres
-          DB_PASSWORD: password
-          DB_HOST: 127.0.0.1
-          DB_PORT: "5432"
-          DB_SCHEME: postgresql
-          REDIS_HOST: 127.0.0.1
-          REDIS_PORT: "6379"
-        run: |
-          uv run coverage run -m pytest -q
+          uv run coverage run -m pytest
           uv run coverage report -m --fail-under=80

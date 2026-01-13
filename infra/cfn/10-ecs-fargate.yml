@@ -108,6 +108,7 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
+      Family: !Sub "${AppName}-${Environment}"
       RequiresCompatibilities: [FARGATE]
       NetworkMode: awsvpc
       Cpu: !Ref Cpu
@@ -152,6 +153,9 @@ Resources:
 Outputs:
   EcrRepositoryName:
     Value: !Ref EcrRepository
+
+  TaskFamily:
+    Value: !Sub "${AppName}-${Environment}"
 
   EcrRepositoryUri:
     Value: !GetAtt EcrRepository.RepositoryUri

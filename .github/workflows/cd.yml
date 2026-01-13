@@ -109,17 +109,26 @@ jobs:
           echo "$OUT" > outputs.json
 
           get() {
-            python -c 'import json,sys; outs=json.load(open("outputs.json")); key=sys.argv[1]; print(next(o["OutputValue"] for o in outs if o["OutputKey"]==key))' "$1"
+            local key="$1"
+            jq -r --arg k "$key" '.[] | select(.OutputKey==$k) | .OutputValue' outputs.json | head -n 1
           }
 
           echo "ECR_URI=$(get EcrRepositoryUri)" >> $GITHUB_ENV
           echo "ECR_NAME=$(get EcrRepositoryName)" >> $GITHUB_ENV
           echo "ECS_CLUSTER=$(get ClusterName)" >> $GITHUB_ENV
           echo "ECS_SERVICE=$(get ServiceName)" >> $GITHUB_ENV
-          echo "TASK_FAMILY=$(get TaskFamily)" >> $GITHUB_ENV
+
+          TASK_FAMILY="$(get TaskFamily)"
+          if [ -z "${TASK_FAMILY}" ] || [ "${TASK_FAMILY}" = "null" ]; then
+            TASK_FAMILY="${APP_NAME}-${APP_ENV}"
+          fi
+          echo "TASK_FAMILY=${TASK_FAMILY}" >> $GITHUB_ENV
+
           echo "TASK_EXEC_ROLE_ARN=$(get TaskExecutionRoleArn)" >> $GITHUB_ENV
           echo "TASK_ROLE_ARN=$(get TaskRoleArn)" >> $GITHUB_ENV
           echo "LOG_GROUP=$(get LogGroupName)" >> $GITHUB_ENV
+
+          echo "Resolved TASK_FAMILY=${TASK_FAMILY}"
 
       # 7) Login ECR
       - name: Login to Amazon ECR

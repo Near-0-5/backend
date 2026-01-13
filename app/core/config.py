@@ -1,24 +1,36 @@
-"""pydantic-settings 기반 설정.
+import os
+import time
+from datetime import datetime, timedelta, timezone
 
-여기에 넣을 것:
-- env 파일 로딩(예: envs/.local.env)
-- DB 설정, SECRET_KEY, 외부 API 키(Kakao/Naver), AWS 설정 등
-- DB URL 조합 프로퍼티(DATABASE_URL)
-
-주의:
-- 필수 필드를 너무 많이 만들어두면 테스트/CI에서 env 없어서 터질 수 있음.
-"""
-
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 시스템 타임존 설정
+os.environ["TZ"] = "Asia/Seoul"
+try:
+    time.tzset()
+except AttributeError:
+    pass
+
+KST = timezone(timedelta(hours=9))
+
+
+def now_kst() -> datetime:
+    return datetime.now(KST)
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file="envs/.local.env",
+        env_file=f"envs/.{os.getenv('MODE', 'local')}.env",
         env_file_encoding="utf-8",
         extra="ignore",
+        case_sensitive=False,
     )
 
+    # 기본 설정
+    MODE: str = Field(default="local")
+
+    # DB 설정
     DB_SCHEME: str
     DB_HOST: str
     DB_PORT: int
@@ -28,12 +40,33 @@ class Settings(BaseSettings):
 
     AUTO_SCHEMA: str = "0"  # 개발 초기에만 1로 켜서 generate_schemas를 쓰는 경우에 사용
 
+    # 보안 설정
+    SECRET_KEY: str
+    STREAM_KEY_ENCRYPTION_KEY: str  # IVS 키 암호화용
+    ADMIN_SECRET_KEY: str  # FastAPI Admin용
+
+    # ADMIN 계정
+    ADMIN_USERNAME: str
+    ADMIN_PASSWORD: str
+
+    # AWS IVS, S3
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str = "ap-northeast-2"
+    S3_RECORDING_BUCKET: str
+
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def DATABASE_URL(self) -> str:
-        return (
-            f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        )
+        return f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
 settings = Settings()
+
+print(
+    "\n\n"
+    + "=" * 50
+    + f"\n      Running in [{settings.MODE}] mode (DB: {settings.DB_HOST})\n"
+    + "=" * 50
+    + "\n\n"
+)

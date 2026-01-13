@@ -1,9 +1,17 @@
 name: DuckDNS Cron Update (ECS Public IP)
 
 on:
+  # 1) 수동 실행 버튼
   workflow_dispatch:
+
+  # 2) CD 워크플로가 "성공"으로 끝났을 때 자동 실행
+  workflow_run:
+    workflows: ["CD (ECR + ECS via CloudFormation)"]
+    types: [completed]
+
+  # 3) (옵션) 보험용 크론 — 원하면 유지, 아니면 삭제
   schedule:
-    - cron: "*/10 * * * *"   # 10분마다 (UTC 기준이지만 10분 주기는 상관없음)
+    - cron: "*/10 * * * *"
 
 permissions:
   id-token: write
@@ -20,6 +28,9 @@ env:
 
 jobs:
   update-duckdns:
+    if: |
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials (OIDC)

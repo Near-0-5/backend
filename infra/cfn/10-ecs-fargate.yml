@@ -162,9 +162,6 @@ Outputs:
   ServiceName:
     Value: !GetAtt Service.Name
 
-  TaskFamily:
-    Value: !GetAtt TaskDefinition.Family
-
   TaskExecutionRoleArn:
     Value: !GetAtt TaskExecutionRole.Arn
 

@@ -168,6 +168,24 @@ jobs:
           export DB_USER="${DB_USER}"
           export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
 
+          export MODE="${APP_ENV}"
+          export AWS_REGION="${AWS_REGION}"
+
+          # redis
+          export REDIS_HOST="redis"
+          export REDIS_PORT="6379"
+
+          # s3
+          export S3_RECORDING_BUCKET="${{ secrets.S3_RECORDING_BUCKET }}"
+
+          # secrets / admin (FastAPI)
+          export SECRET_KEY="${{ secrets.SECRET_KEY }}"
+          export STREAM_KEY_ENCRYPTION_KEY="${{ secrets.STREAM_KEY_ENCRYPTION_KEY }}"
+
+          export ADMIN_SECRET_KEY="${{ secrets.ADMIN_SECRET_KEY }}"
+          export ADMIN_USERNAME="${{ secrets.ADMIN_USERNAME }}"
+          export ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
+
           : "${DB_HOST:?DB_HOST is required}"
           : "${DB_PASSWORD:?DB_PASSWORD is required}"
 

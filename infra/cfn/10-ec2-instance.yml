@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: AWS에서 키페어(near05-key) 선택
+  ExistingBucketName:
+    Type: String
+    Default: "my-concert-ivs-recordings"
+    Description: 스트림 영상이 저장될 기존 S3 버킷 이름
+
+Resources:
+  # 고정 IP (Elastic IP)
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Tags:
+        - Key: Name
+          Value: near05-static-ip
+
+  # 보안 그룹
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and FastAPI App
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 8000, ToPort: 8000, CidrIp: 0.0.0.0/0 }
+
+  # IVS 녹화 설정
+  MyIVSRecordingConfig:
+    Type: AWS::IVS::RecordingConfiguration
+    Properties:
+      Name: near05-recording-config
+      DestinationConfiguration:
+        S3: { BucketName: !Ref ExistingBucketName }
+
+  # IVS 채널
+  MyIVSChannel:
+    Type: AWS::IVS::Channel
+    Properties:
+      Name: near05-channel
+      Type: STANDARD
+      LatencyMode: LOW
+      RecordingConfigurationArn: !Ref MyIVSRecordingConfig
+
+  # EC2 서버 (AMI ID 자동 조회 방식)
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3a.medium
+      # 직접 ID를 적는 대신, 서울 리전의 최신 AL2023 이미지를 자동으로 찾아오도록 설정
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}"
+      KeyName: !Ref KeyName
+      SecurityGroups: [!Ref MySG]
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf update -y
+          dnf install -y docker docker-compose-plugin
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ec2-user
+          dd if=/dev/zero of=/swapfile bs=128M count=16
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+
+  # 고정 IP 연결
+  EIPAssoc:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      InstanceId: !Ref MyEC2
+
+  # 이미지 저장소 (ECR)
+  MyECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: near05-api
+
+Outputs:
+  PublicIP:
+    Description: 고정 IP. GitHub Secret 'EC2_HOST'에 등록
+    Value: !Ref MyEIP
+  IVSChannelArn:
+    Description: IVS 채널 ARN
+    Value: !Ref MyIVSChannel
+  IVSIngestEndpoint:
+    Description: OBS 송출용 서버 주소
+    Value: !GetAtt MyIVSChannel.IngestEndpoint

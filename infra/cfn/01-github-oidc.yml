@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: GitHub organization 이름
+    Default: Near-0-5
+  RepositoryName:
+    Type: String
+    Default: backend
+    Description: 레포지토리명
+
+Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList: [6938fd4d98bab03faadb97b34396831e3780aea1]
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: github-actions-deploy-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOIDCProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${RepositoryName}:*"
+      Policies:
+        - PolicyName: GitHubActionsDeployPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # 1. ECR 로그인 및 이미지 푸시 권한
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                Resource: !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/near05-api"
+
+              # 2. EC2 정보 조회 (배포 대상 확인용)
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                Resource: "*"
+
+              # 3. IVS 관련 (앱에서 IVS 정보를 조회해야 할 경우)
+              - Effect: Allow
+                Action:
+                  - ivs:GetChannel
+                  - ivs:ListChannels
+                  - ivs:GetStreamKey
+                Resource: "*"
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn
+    Description: GitHub Secret 'AWS_ROLE_ARN'에 저장

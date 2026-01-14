@@ -1,0 +1,103 @@
+name: Deploy Dev to EC2
+
+on:
+  push:
+    branches: [ dev ] # dev 브랜치 푸시 시 작동
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and Push
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/near05-api:latest -f docker/DockerFile .
+          docker push $ECR_REGISTRY/near05-api:latest
+
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com
+            
+            mkdir -p ~/app
+            cd ~/app
+            
+            # 환경변수 파일 생성
+            echo "AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}" > .env.dev
+            echo "IVS_CHANNEL_ARN=${{ secrets.IVS_CHANNEL_ARN }}" >> .env.dev
+            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env.dev
+            echo "MODE=dev" >> .env.dev
+
+            # 서버 전용 docker-compose 파일 생성 (로컬 설정의 서버 버전)
+            cat <<EOF > docker-compose.dev.yml
+            version: '3.8'
+            services:
+              api:
+                container_name: api-dev
+                image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/near05-api:latest
+                environment:
+                  - MODE=dev
+                env_file: .env.dev
+                ports:
+                  - "8000:8000"
+                depends_on:
+                  db: { condition: service_healthy }
+                  redis: { condition: service_healthy }
+                networks: [ws]
+                restart: always
+
+              db:
+                image: postgres:14
+                container_name: postgres-dev
+                environment:
+                  POSTGRES_USER: postgres
+                  POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                  POSTGRES_DB: near05_db
+                  TZ: Asia/Seoul
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U postgres -d near05_db"]
+                  interval: 5s
+                  retries: 5
+                networks: [ws]
+                volumes: [postgres_data:/var/lib/postgresql/data]
+                restart: always
+
+              redis:
+                image: redis:7
+                container_name: redis-dev
+                healthcheck:
+                  test: ["CMD", "redis-cli", "ping"]
+                  interval: 5s
+                networks: [ws]
+                restart: always
+
+            networks:
+              ws: { driver: bridge }
+            volumes:
+              postgres_data:
+            EOF
+
+            docker compose -f docker-compose.dev.yml pull
+            docker compose -f docker-compose.dev.yml up -d

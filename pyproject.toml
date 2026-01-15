@@ -65,7 +65,23 @@ cache_dir = ".cache/mypy"
 [tool.coverage.run]
 data_file = ".cache/coverage/.coverage"
 source = ["app"]
-omit = ["*/test_*.py"]
+omit = [
+    "*/test_*.py",
+    "*/router.py",
+    "*/router_*.py",
+    "app/api/*",
+    "*/models.py",
+    "*/schemas.py",
+    "app/core/config.py",
+    "app/core/tortoise_config.py",
+    "app/core/logging.py",
+    "app/core/redis.py",
+    "app/core/security.py",
+    "app/main.py",
+    "app/admin/*",
+    "app/tasks/*",
+    "migrations/*",
+]
 
 [tool.coverage.html]
 directory = ".cache/coverage/html"

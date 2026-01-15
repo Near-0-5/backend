@@ -1,17 +1,31 @@
+from enum import Enum
+
 from tortoise import fields, models
 
 from app.domains.streams.models import CategoryType
 
 
+# 소셜 제공자
+class ProviderChoice(str, Enum):
+    KAKAO = "KAKAO"
+    GOOGLE = "GOOGLE"
+
+
+# 성별
+class GenderChoices(str, Enum):
+    M = "M"  # MALE
+    F = "F"  # FEMALE
+
+
 class User(models.Model):
     id = fields.IntField(pk=True)
-    provider = fields.CharField(max_length=20)
+    provider = fields.CharEnumField(ProviderChoice, max_length=20)
     provider_id = fields.CharField(max_length=255, unique=True)
     email = fields.CharField(max_length=100, null=True)
     nickname = fields.CharField(max_length=30, unique=True)
     profile_img_url = fields.CharField(max_length=255, null=True)
-    bio = fields.TextField(null=True)
-    gender = fields.CharField(max_length=1, null=True)
+    bio = fields.TextField(null=True, description="자기소개")
+    gender = fields.CharEnumField(GenderChoices, max_length=1, null=True)
     birth_date = fields.DateField(null=True)
     is_superuser = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)

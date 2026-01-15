@@ -55,6 +55,13 @@ class TranscodingPreset(str, Enum):
     CBD = "CBD"  # CONSTRAINED_BANDWIDTH_DELIVERY
 
 
+# 방송 접근 권한
+class AccessLevel(str, Enum):
+    PUBLIC = "PUBLIC"  # 전체 공개
+    ADMIN_ONLY = "ADMIN_ONLY"  # 관리자/테스트용
+    SPECIFIC = "SPECIFIC"  # 특정 유저(결제 유저 등)
+
+
 class Concert(models.Model):
     """
     공연 정보 관리 테이블
@@ -70,7 +77,20 @@ class Concert(models.Model):
     thumbnail_url = fields.CharField(
         max_length=255, null=True, description="공연 썸네일 사진(포스터 등)"
     )
+    description = fields.TextField(null=True, description="콘서트 소개 글")
+    status = fields.CharEnumField(
+        StreamStatus,
+        max_length=20,
+        default="READY",
+        description="방송 통로 상태 (READY, LIVE, ENDED)",
+    )
+    access_level = fields.CharEnumField(
+        AccessLevel, max_length=20, default=AccessLevel.PUBLIC, description="접근 권한"
+    )
+    is_test = fields.BooleanField(default=False, description="테스트/실제 구분")
+
     start_at = fields.DatetimeField(description="공연 예정 시각")
+    end_at = fields.DatetimeField(null=True, description="종료 예정 시각")
 
     created_at = fields.DateField(auto_now_add=True, description="생성시각")
     updated_at = fields.DateField(auto_now=True, description="수정시각")
@@ -85,6 +105,10 @@ class Concert(models.Model):
 
     class Meta:
         table = "concerts"
+
+    @property
+    def is_live(self) -> bool:
+        return self.status == StreamStatus.LIVE
 
 
 class ConcertArtist(models.Model):
@@ -159,13 +183,6 @@ class StreamChannel(models.Model):
         max_length=255, description="사용자 플레이어에서 재생할 .m3u8 주소"
     )
     stream_key_encrypted = fields.TextField(description="Fernet으로 암호화된 스트림 키 (송출 권한)")
-
-    status = fields.CharEnumField(
-        StreamStatus,
-        max_length=20,
-        default="READY",
-        description="방송 통로 상태 (READY, LIVE, ENDED)",
-    )
 
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)

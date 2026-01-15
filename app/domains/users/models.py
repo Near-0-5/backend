@@ -1,13 +1,46 @@
-"""users 도메인 DB 모델(Tortoise).
+from tortoise import fields, models
 
-여기에 넣을 것:
-- 실제 테이블(예: User, Stream, Category 등)
-- 관계(FK/M2M)는 명확한 네이밍으로
-- Meta(table=...) 지정(필요시)
+from app.domains.streams.models import CategoryType
 
-주의:
-- 모델을 추가/변경했으면 aerich migrate/upgrade 잊지 말기.
-"""
 
-# TODO: from tortoise import fields
-# TODO: from tortoise.models import Model
+class User(models.Model):
+    id = fields.IntField(pk=True)
+    provider = fields.CharField(max_length=20)
+    provider_id = fields.CharField(max_length=255, unique=True)
+    email = fields.CharField(max_length=100, null=True)
+    nickname = fields.CharField(max_length=30, unique=True)
+    profile_img_url = fields.CharField(max_length=255, null=True)
+    bio = fields.TextField(null=True)
+    gender = fields.CharField(max_length=1, null=True)
+    birth_date = fields.DateField(null=True)
+    is_superuser = fields.BooleanField(default=False)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "users"
+
+
+class UserCatFav(models.Model):
+    id = fields.IntField(pk=True)
+    user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
+        "models.User", related_name="cat_favs"
+    )
+    category = fields.CharEnumField(CategoryType)  # Enum 사용
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "user_cat_favs"
+
+
+class UserDeleteLog(models.Model):
+    id = fields.IntField(pk=True)
+    user_id = fields.IntField()
+    email = fields.CharField(max_length=100, null=True)
+    reason = fields.CharField(max_length=200, null=True)
+    deleted_at = fields.DatetimeField()
+    deleted_by = fields.CharField(max_length=50)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "users_delete_logs"

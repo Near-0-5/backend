@@ -14,7 +14,6 @@ from fastapi import APIRouter
 
 from app.domains.artists.router import router as artists_router
 from app.domains.auth.router import router as auth_router
-from app.domains.categories.router import router as categories_router
 from app.domains.chat.router_ws import router as chat_router
 from app.domains.notifications.router import router as notifications_router
 from app.domains.streams.router import router as streams_router
@@ -25,7 +24,6 @@ api_router = APIRouter(prefix="/api/v1")
 # 도메인 라우터 조립
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
-api_router.include_router(categories_router)
 api_router.include_router(artists_router)
 api_router.include_router(streams_router)
 api_router.include_router(chat_router)

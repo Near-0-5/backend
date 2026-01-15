@@ -1,9 +1,6 @@
 name: Deploy Dev to EC2
 
 on:
-  push:
-    branches: [ develop ] # develop 브랜치 푸시 시 작동
-
   pull_request:
     branches:
       - develop

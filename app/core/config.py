@@ -1,3 +1,4 @@
+import contextlib
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -7,10 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 시스템 타임존 설정
 os.environ["TZ"] = "Asia/Seoul"
-try:
+with contextlib.suppress(AttributeError):
     time.tzset()
-except AttributeError:
-    pass
 
 KST = timezone(timedelta(hours=9))
 

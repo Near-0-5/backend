@@ -14,13 +14,16 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from tortoise import Tortoise
 
 from app.api.router import api_router
 from app.core.tortoise_config import TORTOISE_ORM
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger("app")
 

@@ -51,6 +51,9 @@ env_files = ["envs/.local.env"]
 target-version = "py313"
 line-length = 100
 cache-dir = ".cache/ruff"
+exclude = [
+    "migrations"
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]

@@ -1,13 +1,46 @@
-"""artists 도메인 DB 모델(Tortoise).
+from enum import Enum
+from typing import TYPE_CHECKING
 
-여기에 넣을 것:
-- 실제 테이블(예: User, Stream, Category 등)
-- 관계(FK/M2M)는 명확한 네이밍으로
-- Meta(table=...) 지정(필요시)
+from tortoise import fields, models
 
-주의:
-- 모델을 추가/변경했으면 aerich migrate/upgrade 잊지 말기.
-"""
+if TYPE_CHECKING:
+    from app.domains.users.models import User
 
-# TODO: from tortoise import fields
-# TODO: from tortoise.models import Model
+
+# 그룹 형태
+class GroupType(str, Enum):
+    SOLO = "SOLO"  # 솔로
+    GIRL_GROUP = "GIRL_GROUP"  # 걸그룹
+    BOY_BAND = "BOY_BAND"  # 보이그룹
+    MIXED_GROUP = "MIXED_GROUP"  # 혼성그룹
+
+
+class Artist(models.Model):
+    id = fields.IntField(pk=True)
+    stage_name = fields.CharField(max_length=100, description="활동명")
+    profile_img_url = fields.CharField(max_length=255, null=True)
+    agency = fields.CharField(max_length=100, null=True)
+    description = fields.TextField(null=True)
+    debut_date = fields.DateField(null=True)
+    member_count = fields.IntField(null=True)
+    group_type = fields.CharEnumField(GroupType, max_length=50, null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "artists"
+
+
+class Follow(models.Model):
+    id = fields.IntField(pk=True)
+    user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
+        "models.User", related_name="follows"
+    )
+    artist: fields.ForeignKeyRelation["Artist"] = fields.ForeignKeyField(
+        "models.Artist", related_name="followers"
+    )
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "follows"
+        unique_together = (("user", "artist"),)

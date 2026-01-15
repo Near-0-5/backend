@@ -1,13 +1,38 @@
-"""notifications 도메인 DB 모델(Tortoise).
+from typing import TYPE_CHECKING
 
-여기에 넣을 것:
-- 실제 테이블(예: User, Stream, Category 등)
-- 관계(FK/M2M)는 명확한 네이밍으로
-- Meta(table=...) 지정(필요시)
+from tortoise import fields, models
 
-주의:
-- 모델을 추가/변경했으면 aerich migrate/upgrade 잊지 말기.
-"""
+if TYPE_CHECKING:
+    from app.domains.streams.models import Concert
+    from app.domains.users.models import User
 
-# TODO: from tortoise import fields
-# TODO: from tortoise.models import Model
+
+class UserNoti(models.Model):
+    # User와 1:1 관계
+    user: fields.OneToOneRelation["User"] = fields.OneToOneField(
+        "models.User", related_name="noti_setting", pk=True
+    )
+    artist_noti = fields.BooleanField(default=True)
+    live_noti = fields.BooleanField(default=True)
+    marketing_noti = fields.BooleanField(default=False)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "user_notis"
+
+
+class ConcertNoti(models.Model):
+    id = fields.IntField(pk=True)
+    user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
+        "models.User", related_name="concert_notis"
+    )
+    concert: fields.ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
+        "models.Concert", related_name="scheduled_notis"
+    )
+    title = fields.CharField(max_length=100)
+    message = fields.TextField()
+    send_at = fields.DatetimeField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "concert_notis"

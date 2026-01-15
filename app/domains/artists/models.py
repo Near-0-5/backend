@@ -1,8 +1,10 @@
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from tortoise import fields, models
 
-from app.domains.users.models import User
+if TYPE_CHECKING:
+    from app.domains.users.models import User
 
 
 # 그룹 형태

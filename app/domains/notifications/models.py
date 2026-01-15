@@ -1,7 +1,10 @@
+from typing import TYPE_CHECKING
+
 from tortoise import fields, models
 
-from app.domains.streams.models import Concert
-from app.domains.users.models import User
+if TYPE_CHECKING:
+    from app.domains.streams.models import Concert
+    from app.domains.users.models import User
 
 
 class UserNoti(models.Model):

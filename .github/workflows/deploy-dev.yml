@@ -7,10 +7,6 @@ on:
     types:
       - closed
 
-  push:
-    branches:
-      - "develop"
-
 permissions:
   id-token: write
   contents: read
@@ -49,22 +45,32 @@ jobs:
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: near05-api
+          IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ECR_REGISTRY,REPOSITORY,IMAGE_TAG
           script: |
             set -e
             cd ~/app
             
-            export IMAGE_TAG=${{ github.sha }}
-            
+            # 서버에서 AWS ECR 로그인
+            aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            # Docker 이미지 Pull            
             if ! docker pull $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG; then
               echo "[Fail] Failed to pull Docker image"
               exit 1
             fi
             
-            docker compose -f docker-compose.dev.yml up -d --wait
+            # IMAGE_TAG를 docker-compose에 전달
+            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml up -d --wait
+            
+            # 오래된 이미지 정리            
             docker image prune -af --filter "until=72h" || true
             
             echo "[Success] Deployment successful"

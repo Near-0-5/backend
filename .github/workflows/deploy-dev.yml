@@ -13,7 +13,9 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
+    if: | 
+      github.event.pull_request.merged == true &&
+      vars.ENABLE_EC2_DEPLOY == 'true'
 
     runs-on: ubuntu-latest
     steps:

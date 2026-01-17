@@ -1,5 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from contextlib import suppress
+from datetime import UTC, datetime
+
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.domains.chat.manager import ConnectionManager
@@ -7,7 +9,7 @@ from app.domains.chat.schemas import ClientMessage, ServerEvent
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class ChatService:
@@ -18,19 +20,22 @@ class ChatService:
         3) user_id당 room 참여 제한.
         4) 메시지 전송 제한.
     """
+
     def __init__(self, manager: ConnectionManager) -> None:
         """
         ChatService 생성자.
 
         Args:
-            manager (ConnectionManager): room_id별 WebSocket 연결 목록 관리 및 브로드캐스트를 담당하는 매니저
+            manager (ConnectionManager): room_id별 WebSocket 연결 목록 관리 및 브로드캐스트를
+            담당하는 매니저
         """
         self.manager = manager
 
     async def handle_connectioin(self, ws: WebSocket, room_id: str, user_id: str) -> None:
         """
         특정 room_id 채팅방에 대해 WebSocket 연결을 처리하고,
-        클라이언트 메시지를 수신하여 같은 방의 모든 접속자에게 브로드캐스트하는 메인 루프를 수행한다.
+        클라이언트 메시지를 수신하여 같은 방의 모든 접속자에게 브로드캐스트하는
+        메인 루프를 수행한다.
 
         Args:
             ws (WebSocket): 유저 1명과 서버 사이의 WebSocket 연결 객체(통로)
@@ -49,7 +54,8 @@ class ChatService:
 
         Note:
             - 현재 구현은 user_id/room_id를 클라이언트 입력에 의존함.
-            운영 단계에서는 인증(JWT)으로 user_id를 확정하고, 인가로 room 접근을 제한하는 방식으로 확장해아함.
+            운영 단계에서는 인증(JWT)으로 user_id를 확정하고, 인가로 room 접근을 제한하는 방식으로
+            확장해아 함.
         """
         room_id = room_id.strip()
         user_id = user_id.strip()
@@ -71,7 +77,7 @@ class ChatService:
                     text=msg.text,
                     ts=now_iso(),
                     message_id=str(uuid.uuid4()),
-                    ).model_dump()
+                ).model_dump()
                 await self.manager.broadcast_json(room_id, evt)
 
         except WebSocketDisconnect:
@@ -80,10 +86,9 @@ class ChatService:
 
         except Exception:
             await self.manager.disconnect(room_id, ws)
-            try:
+            #! ruff에서 하라고 해서 수정하기는 했는데 예외처리 메시지 전달로 수정해야 함.
+            with suppress(Exception):
                 await ws.close()
-            except Exception:
-                pass
 
     async def _broadcast_system(self, room_id: str, user_id: str, text: str) -> None:
         """
@@ -111,6 +116,4 @@ class ChatService:
         ).model_dump()
         await self.manager.broadcast_json(room_id, evt)
 
-
-    async def _authorize_room_access(self, user_id: str, room_id: str) -> None:
-        ...
+    async def _authorize_room_access(self, user_id: str, room_id: str) -> None: ...

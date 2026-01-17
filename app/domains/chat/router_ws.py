@@ -6,7 +6,7 @@ from app.domains.chat.service import ChatService
 router = APIRouter(prefix="", tags=["chat"])
 
 manager = ConnectionManager()
-service = ChatService()
+service = ChatService(manager)
 
 
 @router.websocket("/ws/chat")

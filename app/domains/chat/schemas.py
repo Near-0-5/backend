@@ -7,7 +7,7 @@ class ClientMessage(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
 class ServerEvent(BaseModel):
-    type: Literal["message"] = "message"
+    type: Literal["message", "system"] = "message"
     room_id: str
     user_id: str
     text: str

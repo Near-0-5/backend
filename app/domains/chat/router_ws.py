@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, Query
+from fastapi import APIRouter, Query, WebSocket
 
 from app.domains.chat.manager import ConnectionManager
 from app.domains.chat.service import ChatService
@@ -10,11 +10,7 @@ service = ChatService(manager)
 
 
 @router.websocket("/ws/chat")
-async def chat_ws(
-    ws: WebSocket,
-    room_id: str = Query(...),
-    user_id: str = Query(...)
-):
+async def chat_ws(ws: WebSocket, room_id: str = Query(...), user_id: str = Query(...)) -> None:
     """
     WebSocket 채팅 엔드포인트(임시 구현).
 

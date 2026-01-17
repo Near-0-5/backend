@@ -1,16 +1,19 @@
 import asyncio
 from collections import defaultdict
-from typing import DefaultDict, Set
+from typing import Any
+
 from fastapi import WebSocket
+
 
 class ConnectionManager:
     def __init__(self) -> None:
         """
         self._room: room_id(채팅방)에 연결된 ws(접속자)을 저장하는 자료구조.
-        self._lock: 여러 코루틴(connect/disconnect/broadcast)이 동시에 self._rooms를 수정할 때
-        레이스 컨디션이 생기지 않도록, self._rooms 수정 구간을 한 번에 하나씩만 실행되게 보호하는 asyncio 락
+        self._lock: 여러 코루틴(connect/disconnect/broadcast)이 동시에
+        self._rooms를 수정할 때 레이스 컨디션이 생기지 않도록,
+        self._rooms 수정 구간을 한 번에 하나씩만 실행되게 보호하는 asyncio 락
         """
-        self._rooms: DefaultDict[str, Set[WebSocket]] = defaultdict(set)
+        self._rooms: defaultdict[str, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
     async def connect(self, room_id: str, ws: WebSocket) -> None:
@@ -36,14 +39,14 @@ class ConnectionManager:
 
         Flow:
             1) self._lock(락)으로 보호된 임계구역에서 self._rooms[room_id]에서 해당 ws를 제거한다.
-            2) 만약 self._rooms[room_id]가 빈 상태이면 해당 room_id 또한 삭제한다. 
+            2) 만약 self._rooms[room_id]가 빈 상태이면 해당 room_id 또한 삭제한다.
         """
         async with self._lock:
             self._rooms[room_id].discard(ws)
             if not self._rooms[room_id]:
                 self._rooms.pop(room_id, None)
 
-    async def broadcast_json(self, room_id: str, payload: dict) -> None:
+    async def broadcast_json(self, room_id: str, payload: dict[str, Any]) -> None:
         """
         특정 room_id(채팅방)에 연결된 모든 WebSocket(접속자)에게 payload(JSON)를 브로드캐스트한다땃.
 
@@ -52,7 +55,8 @@ class ConnectionManager:
             payload (dict): 각 클라이언트에게 전송할 JSON 데이터
 
         Flow:
-            1) self._lock으로 보호된 임계구역에서, 해당 room_id에 연결된 ws 목록을 '복사'해서 targets로 만든다.
+            1) self._lock으로 보호된 임계구역에서, 해당 room_id에 연결된 ws 목록을
+            '복사'해서 targets로 만든다.
             - 락을 오래 잡지 않기 위해, 실제 전송(send)은 락 밖에서 수행한다.
             2) targets에 있는 각 ws에 대해 ws.send_json(payload)로 전송한다.
             3) 전송 중 예외가 발생한 ws는 dead 리스트에 모아둔다. (끊어진/비정상 연결 가능성)

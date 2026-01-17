@@ -10,6 +10,6 @@ class ServerEvent(BaseModel):
     type: Literal["message"] = "message"
     room_id: str
     user_id: str
-    test: str
+    text: str
     ts: str
     message_id: Optional[str] = None

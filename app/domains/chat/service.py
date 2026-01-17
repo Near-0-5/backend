@@ -71,7 +71,7 @@ class ChatService:
                     text=msg.text,
                     ts=now_iso(),
                     message_id=str(uuid.uuid4()),
-                    ).model_dump(),
+                    ).model_dump()
                 await self.manager.broadcast_json(room_id, evt)
 
         except WebSocketDisconnect:

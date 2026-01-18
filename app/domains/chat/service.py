@@ -31,7 +31,7 @@ class ChatService:
         """
         self.manager = manager
 
-    async def handle_connectioin(self, ws: WebSocket, room_id: str, user_id: str) -> None:
+    async def handle_connection(self, ws: WebSocket, room_id: str, user_id: str) -> None:
         """
         특정 room_id 채팅방에 대해 WebSocket 연결을 처리하고,
         클라이언트 메시지를 수신하여 같은 방의 모든 접속자에게 브로드캐스트하는

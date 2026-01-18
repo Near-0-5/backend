@@ -44,14 +44,17 @@ class ChatService:
             user_id (str): 유저 식별자 (현재는 쿼리로 입력받는 값)
 
         Flow:
-            1) room_id/user_id 문자열을 정리(strip)한다.
+            1) room_id / user_id 문자열을 정리(strip)한다.
             2) _authorize_room_access로 해당 유저가 room에 참여 가능한지(인가) 확인한다.
             3) manager.connect로 연결을 등록하고, 입장(system) 이벤트를 브로드캐스트한다.
-            4) 무한 루프에서 클라이언트 메시지를 수신(receive_json)한다.
-            5) ClientMessage 스키마로 입력을 검증한 뒤,
-            ServerEvent로 서버 이벤트를 구성하여 manager.broadcast_json으로 방 전체에 전송한다.
-            6) WebSocketDisconnect 발생 시 연결을 해제하고 퇴장(system) 이벤트를 브로드캐스트한다.
-            7) 기타 예외 발생 시 연결을 정리하고 가능하면 소켓을 close한다.
+            4) Redis에서 최근 메시지 50개를 조회(get_recent_messages)하여,
+            접속한 클라이언트(ws)에만 전송한다.
+            5) 무한 루프에서 클라이언트 메시지를 수신(receive_json)한다.
+            6) ClientMessage 스키마로 입력을 검증한 뒤, ServerEvent를 구성한다.
+            7) 구성한 ServerEvent를 Redis에 저장(append_chat_message)하고,
+            manager.broadcast_json으로 방 전체에 전송한다.
+            8) WebSocketDisconnect 발생 시 연결을 해제하고 퇴장(system) 이벤트를 브로드캐스트한다.
+            9) 기타 예외 발생 시 연결을 정리하고 가능하면 소켓을 close한다.
 
         Note:
             - 현재 구현은 user_id/room_id를 클라이언트 입력에 의존함.

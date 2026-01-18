@@ -6,6 +6,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.domains.chat.manager import ConnectionManager
 from app.domains.chat.schemas import ClientMessage, ServerEvent
+from app.domains.chat.repository import append_chat_message, get_recent_messages
 
 
 def now_iso() -> str:
@@ -66,6 +67,9 @@ class ChatService:
         await self._broadcast_system(room_id, user_id, f"{user_id} joined")
 
         try:
+            items = await get_recent_messages(room_id, limit=50)
+            await ws.send_json({"type": "recent", "room_id": room_id, "items": items})
+
             while True:
                 data = await ws.receive_json()
                 msg = ClientMessage.model_validate(data)
@@ -78,6 +82,9 @@ class ChatService:
                     ts=now_iso(),
                     message_id=str(uuid.uuid4()),
                 ).model_dump()
+                
+                await append_chat_message(room_id, evt)
+
                 await self.manager.broadcast_json(room_id, evt)
 
         except WebSocketDisconnect:

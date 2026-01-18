@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASSWORD: str
 
+    # REDIS 설정
+    REDIS_HOST: str
+    REDIS_PORT: str
+
     AUTO_SCHEMA: str = "0"  # 개발 초기에만 1로 켜서 generate_schemas를 쓰는 경우에 사용
 
     # 보안 설정

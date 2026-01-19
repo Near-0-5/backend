@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, Literal, ParamSpec, TypedDict, Unpack
+from typing import Any, Literal, ParamSpec, TypedDict, TypeVar, Unpack
 
 import boto3
 from botocore.exceptions import ClientError
@@ -28,15 +28,15 @@ from mypy_boto3_ivs.type_defs import (
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
-def log_ivs_errors[P: ParamSpec, T](func: Callable[P, T]) -> Callable[P, T]:  # type: ignore[valid-type, misc]
+def log_ivs_errors(func: Callable[P, T]) -> Callable[P, T]:  # noqa: UP047
     """IVS API 호출 중 ClientError 발생 시 로깅 처리 데코레이터 함수"""
 
     @wraps(func)
-    # def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-    # mypy가 PEP 695 ParamSpec 인식 못해서 Any로 처리함
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         try:
             return func(*args, **kwargs)
         except ClientError as e:

@@ -50,6 +50,5 @@ class TestChatWebSocket:
             evt = recv_until(w, "message")
             assert_message(evt, room_id=1, user_id=1, text="안녕")
 
-
     def test_import_thin_modules(self) -> None:
         pass

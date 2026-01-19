@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 class UserNoti(models.Model):
     # User와 1:1 관계
     user: fields.OneToOneRelation["User"] = fields.OneToOneField(
-        "models.User", related_name="noti_setting", pk=True
+        "models.User", related_name="noti_setting", on_delete=fields.CASCADE, pk=True
     )
     artist_noti = fields.BooleanField(default=True)
     live_noti = fields.BooleanField(default=True)

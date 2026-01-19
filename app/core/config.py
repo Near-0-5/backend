@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import os
 import time
@@ -56,6 +57,7 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str = "ap-northeast-2"
+    IVS_PLAYBACK_PRIVATE_KEY_B64: str = Field(..., env="IVS_PLAYBACK_PRIVATE_KEY_B64")
     S3_RECORDING_BUCKET: str
 
     @computed_field  # type: ignore[prop-decorator]
@@ -68,6 +70,13 @@ class Settings(BaseSettings):
     def REDIS_URL(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
+    @property
+    def IVS_PLAYBACK_PRIVATE_KEY(self) -> str:
+        """Base64로 저장된 키를 원본 PEM 문자열로 디코딩"""
+        try:
+            return base64.b64decode(self.IVS_PLAYBACK_PRIVATE_KEY_B64).decode("utf-8")
+        except Exception as e:
+            raise RuntimeError(f"IVS PRIVATE KEY 디코딩 실패: {e}")
 
 settings = Settings()
 

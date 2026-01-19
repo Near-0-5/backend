@@ -1,20 +1,23 @@
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError
-from mypy_boto3_ivs.type_defs import (
-    BatchGetChannelResponseTypeDef,
-    BatchGetStreamKeyResponseTypeDef,
-    CreateChannelResponseTypeDef,
-    CreateStreamKeyResponseTypeDef,
-    GetChannelResponseTypeDef,
-    GetStreamKeyResponseTypeDef,
-    GetStreamResponseTypeDef,
-    GetStreamSessionResponseTypeDef,
-    UpdateChannelResponseTypeDef,
-)
 
 from app.integrations.aws_ivs.client import IVSClient
+
+if TYPE_CHECKING:
+    from mypy_boto3_ivs.type_defs import (
+        BatchGetChannelResponseTypeDef,
+        BatchGetStreamKeyResponseTypeDef,
+        CreateChannelResponseTypeDef,
+        CreateStreamKeyResponseTypeDef,
+        GetChannelResponseTypeDef,
+        GetStreamKeyResponseTypeDef,
+        GetStreamResponseTypeDef,
+        GetStreamSessionResponseTypeDef,
+        UpdateChannelResponseTypeDef,
+    )
 
 
 @pytest.fixture

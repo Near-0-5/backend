@@ -18,11 +18,9 @@ def recv_until(ws_sess, want_type: str, max_reads: int = 30) -> dict:
                 f"WebSocket이 먼저 끊김(code={getattr(e, 'code', None)}). "
                 f"원하던 type='{want_type}' 못 받았음. 마지막 이벤트={last}"
             ) from e
-
         last = evt
         if isinstance(evt, dict) and evt.get("type") == want_type:
             return evt
-
     raise AssertionError(f"'{want_type}' 이벤트를 못 찾았음. 마지막 이벤트={last}")
 
 
@@ -47,6 +45,7 @@ class TestChatWebSocket:
 
     def test_ws_send_message_receive_broadcast(self) -> None:
         with self.client.websocket_connect(ws(1, 1)) as w:
+            _ = recv_until(w, "recent")
             w.send_json({"type": "message", "text": "안녕"})
             evt = recv_until(w, "message")
             assert_message(evt, room_id=1, user_id=1, text="안녕")
@@ -56,14 +55,18 @@ class TestChatWebSocket:
         c2 = TestClient(app)
         try:
             with c1.websocket_connect(ws(1, 1)) as w1, c2.websocket_connect(ws(1, 2)) as w2:
-                w1.send_json({"type": "message", "text": "hello"})
+                _ = recv_until(w1, "recent")
+                _ = recv_until(w2, "recent")
 
-                _ = recv_until(w1, "message")
-                evt2 = recv_until(w2, "message")
-                assert_message(evt2, room_id=1, user_id=1, text="hello")
+                sys_evt = recv_until(w1, "system")
+                assert sys_evt["type"] == "system"
+                assert str(sys_evt.get("room_id")) == "1"
+                assert str(sys_evt.get("user_id")) == "2"
+                assert "joined" in sys_evt.get("text", "")
+                assert "ts" in sys_evt
         finally:
             c1.close()
             c2.close()
 
     def test_import_thin_modules(self) -> None:
-        pass
+        import app.main

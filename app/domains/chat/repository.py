@@ -5,8 +5,9 @@ from app.core.redis import redis_client
 from app.domains.chat.schemas import ServerEvent
 
 #! 환경변수로 빼야하나 고민 중
-CHAT_MAX_MESSAGES = 100 # 최근 100개만 유지
-CHAT_TTL_SECONDS = 60 * 60 * 24 # 1일 TTL
+CHAT_MAX_MESSAGES = 100  # 최근 100개만 유지
+CHAT_TTL_SECONDS = 60 * 60 * 24  # 1일 TTL
+
 
 def _chat_key(room_id: str) -> str:
     return f"chat:{room_id}"

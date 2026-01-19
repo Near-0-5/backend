@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.domains.chat.manager import ConnectionManager
-from app.domains.chat.schemas import ClientMessage, ServerEvent
 from app.domains.chat.repository import append_chat_message, get_recent_messages
+from app.domains.chat.schemas import ClientMessage, ServerEvent
 
 
 def now_iso() -> str:
@@ -85,7 +85,7 @@ class ChatService:
                     ts=now_iso(),
                     message_id=str(uuid.uuid4()),
                 ).model_dump()
-                
+
                 await append_chat_message(room_id, evt)
 
                 await self.manager.broadcast_json(room_id, evt)

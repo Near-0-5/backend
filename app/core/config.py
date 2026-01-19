@@ -62,8 +62,8 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL(self) -> str:
         return f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-    
-    @computed_field# type: ignore[prop-decorator]
+
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def REDIS_URL(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"

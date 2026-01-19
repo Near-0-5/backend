@@ -116,3 +116,52 @@ class IVSPlaybackProvider:
             raise ValueError("토큰이 만료되었습니다.") from None
         except InvalidTokenError as e:
             raise ValueError(f"유효하지 않은 토큰입니다: {str(e)}") from e
+
+    # ===================== playback_token 재발급 =====================
+
+    def refresh_access_token(self, refresh_token: str) -> str:
+        """
+        [내부 세션] 유효한 Refresh Token을 기반으로 새로운 Access Token 생성
+        """
+        # Refresh Token 검증
+        payload = self.verify_internal_token(refresh_token, expected_type="refresh")
+
+        # 새로운 Access Token 발급
+        now = int(time.time())
+        new_access_payload: InternalTokenPayload = {
+            "sub": payload["sub"],
+            "stream_id": payload["stream_id"],
+            "type": "access",
+            "iat": now,
+            "exp": now + (30 * 60),
+        }
+        return jwt.encode(
+            cast("dict[str, Any]", new_access_payload), self._secret, algorithm=self._algo_internal
+        )
+
+    def rotate_tokens(self, refresh_token: str) -> dict[str, str]:
+        """
+        [내부 세션] Access와 Refresh 토큰을 모두 새로 발급 (Refresh Token Rotation)
+        """
+        payload = self.verify_internal_token(refresh_token, expected_type="refresh")
+        return self.sign_internal_tokens(user_id=payload["sub"], stream_id=payload["stream_id"])
+
+    # ===================================================
+
+    def get_internal_token_remaining_time(self, token: str) -> int:
+        """
+        [Internal Token 전용] 만료까지 남은 시간(초)
+        """
+        try:
+            decoded = jwt.decode(
+                token,
+                self._secret,
+                algorithms=[self._algo_internal],
+                options={"verify_exp": False},
+            )
+            exp = decoded.get("exp")
+            if not isinstance(exp, int):
+                return 0
+            return max(0, exp - int(time.time()))
+        except InvalidTokenError:
+            return 0

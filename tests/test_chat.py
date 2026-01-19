@@ -1,35 +1,45 @@
+import threading
+import uuid
+
 from starlette.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
 
 
-def ws(room_id: int | str, user_id: int | str) -> str:
+def ws(room_id: str, user_id: str) -> str:
     return f"/api/v1/ws/chat?room_id={room_id}&user_id={user_id}"
 
 
-def recv_until(ws_sess, want_type: str, max_reads: int = 30) -> dict:
-    last = None
-    for _ in range(max_reads):
+def recv_until(ws_sess, want_type: str, *, timeout: float = 2.0, max_reads: int = 50) -> dict:
+    result: dict | None = None
+    err: BaseException | None = None
+
+    def _run():
+        nonlocal result, err
+        last = None
         try:
-            evt = ws_sess.receive_json()
-        except WebSocketDisconnect as e:
-            raise AssertionError(
-                f"WebSocket이 먼저 끊김(code={getattr(e, 'code', None)}). "
-                f"원하던 type='{want_type}' 못 받았음. 마지막 이벤트={last}"
-            ) from e
-        last = evt
-        if isinstance(evt, dict) and evt.get("type") == want_type:
-            return evt
-    raise AssertionError(f"'{want_type}' 이벤트를 못 찾았음. 마지막 이벤트={last}")
+            for _ in range(max_reads):
+                evt = ws_sess.receive_json()
+                last = evt
+                if isinstance(evt, dict) and evt.get("type") == want_type:
+                    result = evt
+                    return
+            err = AssertionError(f"'{want_type}' 이벤트 못 찾았음. last={last}")
+        except BaseException as e:
+            err = e
 
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout)
 
-def assert_message(evt: dict, *, room_id, user_id, text: str) -> None:
-    assert evt["type"] == "message"
-    assert str(evt.get("room_id")) == str(room_id)
-    assert str(evt.get("user_id")) == str(user_id)
-    assert evt.get("text") == text
-    assert "ts" in evt
+    if t.is_alive():
+        raise AssertionError(f"'{want_type}' 이벤트를 {timeout}s 내에 못 받았음(대기 상태).")
+
+    if err:
+        raise err
+
+    assert result is not None
+    return result
 
 
 class TestChatWebSocket:
@@ -39,16 +49,27 @@ class TestChatWebSocket:
     def teardown_method(self) -> None:
         self.client.close()
 
-    def test_ws_connect_ok(self) -> None:
-        with self.client.websocket_connect(ws(1, 1)):
-            pass
+    def test_ws_connect_and_recent_ok(self) -> None:
+        room_id = f"t-{uuid.uuid4().hex}"
+        with self.client.websocket_connect(ws(room_id, "1")) as w:
+            recent = recv_until(w, "recent")
+            assert recent["type"] == "recent"
+            assert str(recent.get("room_id")) == room_id
+            assert isinstance(recent.get("items"), list)
 
-    def test_ws_send_message_receive_broadcast(self) -> None:
-        with self.client.websocket_connect(ws(1, 1)) as w:
+    def test_ws_send_message_echo_ok(self) -> None:
+        room_id = f"t-{uuid.uuid4().hex}"
+        with self.client.websocket_connect(ws(room_id, "1")) as w:
             _ = recv_until(w, "recent")
+
             w.send_json({"type": "message", "text": "안녕"})
             evt = recv_until(w, "message")
-            assert_message(evt, room_id=1, user_id=1, text="안녕")
+
+            assert evt["type"] == "message"
+            assert str(evt.get("room_id")) == room_id
+            assert str(evt.get("user_id")) == "1"
+            assert evt.get("text") == "안녕"
+            assert "ts" in evt
 
     def test_import_thin_modules(self) -> None:
         pass

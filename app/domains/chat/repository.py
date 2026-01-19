@@ -66,7 +66,11 @@ async def get_recent_messages(room_id: str, limit: int = 50) -> list[dict[str, A
     key = _chat_key(room_id)
     limit = max(1, min(limit, CHAT_MAX_MESSAGES))
 
-    raw = await redis_client.lrange(key, -limit, -1)
+    try:
+        raw = await redis_client.lrange(key, -limit, -1)
+    except Exception:
+        return []
+
     out: list[dict[str, Any]] = []
     for item in raw:
         try:

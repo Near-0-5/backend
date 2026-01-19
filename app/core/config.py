@@ -19,6 +19,9 @@ def now_kst() -> datetime:
 
 
 class Settings(BaseSettings):
+    # api 버전경로 명시
+    API_V1_STR: str = "/api/v1"
+
     model_config = SettingsConfigDict(
         env_file=f"envs/.{os.getenv('MODE', 'local')}.env",
         env_file_encoding="utf-8",
@@ -43,6 +46,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     STREAM_KEY_ENCRYPTION_KEY: str  # IVS 키 암호화용
     ADMIN_SECRET_KEY: str  # FastAPI Admin용
+    ACCESS_TOKEN_EXPIRE_MINUTES: int  # 토큰 유효분
 
     # ADMIN 계정
     ADMIN_USERNAME: str
@@ -53,6 +57,10 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str = "ap-northeast-2"
     S3_RECORDING_BUCKET: str
+
+    # social_login
+    KAKAO_REST_API_KEY: str
+    KAKAO_REDIRECT_URI: str
 
     @computed_field  # type: ignore[prop-decorator]
     @property

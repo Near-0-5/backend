@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.domains.chat.manager import ConnectionManager
+from app.domains.chat.repository import append_chat_message, get_recent_messages
 from app.domains.chat.schemas import ClientMessage, ServerEvent
 
 
@@ -19,6 +20,7 @@ class ChatService:
         2) user_id를 JWT에서 추출하도록 수정.
         3) user_id당 room 참여 제한.
         4) 메시지 전송 제한.
+        5) 채팅방 입장은 본인에게만, 퇴장은 삭제
     """
 
     def __init__(self, manager: ConnectionManager) -> None:
@@ -31,7 +33,7 @@ class ChatService:
         """
         self.manager = manager
 
-    async def handle_connectioin(self, ws: WebSocket, room_id: str, user_id: str) -> None:
+    async def handle_connection(self, ws: WebSocket, room_id: str, user_id: str) -> None:
         """
         특정 room_id 채팅방에 대해 WebSocket 연결을 처리하고,
         클라이언트 메시지를 수신하여 같은 방의 모든 접속자에게 브로드캐스트하는
@@ -43,14 +45,17 @@ class ChatService:
             user_id (str): 유저 식별자 (현재는 쿼리로 입력받는 값)
 
         Flow:
-            1) room_id/user_id 문자열을 정리(strip)한다.
+            1) room_id / user_id 문자열을 정리(strip)한다.
             2) _authorize_room_access로 해당 유저가 room에 참여 가능한지(인가) 확인한다.
             3) manager.connect로 연결을 등록하고, 입장(system) 이벤트를 브로드캐스트한다.
-            4) 무한 루프에서 클라이언트 메시지를 수신(receive_json)한다.
-            5) ClientMessage 스키마로 입력을 검증한 뒤,
-            ServerEvent로 서버 이벤트를 구성하여 manager.broadcast_json으로 방 전체에 전송한다.
-            6) WebSocketDisconnect 발생 시 연결을 해제하고 퇴장(system) 이벤트를 브로드캐스트한다.
-            7) 기타 예외 발생 시 연결을 정리하고 가능하면 소켓을 close한다.
+            4) Redis에서 최근 메시지 50개를 조회(get_recent_messages)하여,
+            접속한 클라이언트(ws)에만 전송한다.
+            5) 무한 루프에서 클라이언트 메시지를 수신(receive_json)한다.
+            6) ClientMessage 스키마로 입력을 검증한 뒤, ServerEvent를 구성한다.
+            7) 구성한 ServerEvent를 Redis에 저장(append_chat_message)하고,
+            manager.broadcast_json으로 방 전체에 전송한다.
+            8) WebSocketDisconnect 발생 시 연결을 해제하고 퇴장(system) 이벤트를 브로드캐스트한다.
+            9) 기타 예외 발생 시 연결을 정리하고 가능하면 소켓을 close한다.
 
         Note:
             - 현재 구현은 user_id/room_id를 클라이언트 입력에 의존함.
@@ -66,6 +71,9 @@ class ChatService:
         await self._broadcast_system(room_id, user_id, f"{user_id} joined")
 
         try:
+            items = await get_recent_messages(room_id, limit=50)
+            await ws.send_json({"type": "recent", "room_id": room_id, "items": items})
+
             while True:
                 data = await ws.receive_json()
                 msg = ClientMessage.model_validate(data)
@@ -78,6 +86,9 @@ class ChatService:
                     ts=now_iso(),
                     message_id=str(uuid.uuid4()),
                 ).model_dump()
+
+                await append_chat_message(room_id, evt)
+
                 await self.manager.broadcast_json(room_id, evt)
 
         except WebSocketDisconnect:

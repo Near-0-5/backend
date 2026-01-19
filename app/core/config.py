@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASSWORD: str
 
+    # REDIS 설정
+    REDIS_HOST: str
+    REDIS_PORT: str
+
     AUTO_SCHEMA: str = "0"  # 개발 초기에만 1로 켜서 generate_schemas를 쓰는 경우에 사용
 
     # 보안 설정
@@ -58,6 +62,11 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL(self) -> str:
         return f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def REDIS_URL(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
 
 settings = Settings()

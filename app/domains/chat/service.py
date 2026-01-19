@@ -20,6 +20,7 @@ class ChatService:
         2) user_id를 JWT에서 추출하도록 수정.
         3) user_id당 room 참여 제한.
         4) 메시지 전송 제한.
+        5) 채팅방 입장은 본인에게만, 퇴장은 삭제
     """
 
     def __init__(self, manager: ConnectionManager) -> None:

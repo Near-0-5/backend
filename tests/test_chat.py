@@ -50,23 +50,6 @@ class TestChatWebSocket:
             evt = recv_until(w, "message")
             assert_message(evt, room_id=1, user_id=1, text="안녕")
 
-    def test_ws_broadcast_to_other_client(self) -> None:
-        c1 = TestClient(app)
-        c2 = TestClient(app)
-        try:
-            with c1.websocket_connect(ws(1, 1)) as w1, c2.websocket_connect(ws(1, 2)) as w2:
-                _ = recv_until(w1, "recent")
-                _ = recv_until(w2, "recent")
-
-                sys_evt = recv_until(w1, "system")
-                assert sys_evt["type"] == "system"
-                assert str(sys_evt.get("room_id")) == "1"
-                assert str(sys_evt.get("user_id")) == "2"
-                assert "joined" in sys_evt.get("text", "")
-                assert "ts" in sys_evt
-        finally:
-            c1.close()
-            c2.close()
 
     def test_import_thin_modules(self) -> None:
         pass

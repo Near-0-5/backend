@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.domains.chat.manager import ConnectionManager
-from app.domains.chat.repository import append_chat_message, get_recent_messages
+from app.domains.chat.repository import append_chat_message, get_recent_messages, rate_limit_ok
 from app.domains.chat.schemas import ClientMessage, ServerEvent
+
+from app.domains.streams.models import StreamChannel
 
 
 def now_iso() -> str:
@@ -65,7 +67,7 @@ class ChatService:
         room_id = room_id.strip()
         user_id = user_id.strip()
 
-        await self._authorize_room_access(user_id=user_id, room_id=room_id)
+        await self._authorize_room_access(room_id=room_id)
 
         await self.manager.connect(room_id, ws)
         await self._broadcast_system(room_id, user_id, f"{user_id} joined")
@@ -77,6 +79,18 @@ class ChatService:
             while True:
                 data = await ws.receive_json()
                 msg = ClientMessage.model_validate(data)
+
+                ok = await rate_limit_ok(room_id, user_id)
+                if not ok:
+                    await ws.send_json({
+                        "type": "system",
+                        "room_id": room_id,
+                        "user_id": user_id,
+                        "text": "메시지는 2초에 1개만 보낼 수 있어",
+                        "ts": now_iso(),
+                        "message_id": None,
+                    })
+                    continue
 
                 evt = ServerEvent(
                     type="message",
@@ -127,4 +141,14 @@ class ChatService:
         ).model_dump()
         await self.manager.broadcast_json(room_id, evt)
 
-    async def _authorize_room_access(self, user_id: str, room_id: str) -> None: ...
+    async def _authorize_room_access(self, room_id: str) -> None:
+        # room_id 타입 검증
+        try:
+            stream_id = int(room_id)
+        except ValueError:
+            raise ValueError("Invalid stream_id")
+        
+        # 존재 확인
+        exists = await StreamChannel.exists(id=stream_id)
+        if not exists:
+            raise ValueError("stream not found")

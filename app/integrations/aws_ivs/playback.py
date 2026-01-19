@@ -1,7 +1,8 @@
 import time
-from typing import TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 import jwt
+from jwt.exceptions import InvalidTokenError
 
 from app.core.config import settings
 
@@ -14,6 +15,16 @@ class IVSPlaybackPayload(TypedDict):
     exp: int  # Expiration Time (언제 만료)
     # "aws:channel-arn": str
     # "aws:viewer-id": str
+
+
+class InternalTokenPayload(TypedDict):
+    """우리 서비스 내부 인증용 페이로드 (HS256)"""
+
+    sub: str  # User ID
+    stream_id: str  # 방송 PK
+    type: Literal["access", "refresh"]
+    iat: int
+    exp: int
 
 
 class IVSPlaybackProvider:
@@ -48,3 +59,60 @@ class IVSPlaybackProvider:
         }
         # ECDSA P-384 알고리즘으로 서명
         return jwt.encode(payload, self._ivs_private_key, algorithm=self._algo_ivs)
+
+    def sign_internal_tokens(self, user_id: str, stream_id: str) -> dict[str, str]:
+        """
+        [내부 세션] Access & Refresh 토큰 세트 발급 (HS256)
+        - Access: 채팅/API 접근용 (단기)
+        - Refresh: 토큰 재발급용 (장기)
+        """
+        now = int(time.time())
+
+        access_exp = now + (30 * 60)  # 30분
+        refresh_exp = now + (7 * 24 * 3600)  # 7일
+
+        access_payload: InternalTokenPayload = {
+            "sub": user_id,
+            "stream_id": stream_id,
+            "type": "access",
+            "iat": now,
+            "exp": access_exp,
+        }
+        refresh_payload: InternalTokenPayload = {
+            "sub": user_id,
+            "type": "refresh",
+            "stream_id": stream_id,
+            "iat": now,
+            "exp": refresh_exp,
+        }
+
+        return {
+            "access_token": jwt.encode(
+                cast("dict[str, Any]", access_payload), self._secret, algorithm=self._algo_internal
+            ),
+            "refresh_token": jwt.encode(
+                cast("dict[str, Any]", refresh_payload), self._secret, algorithm=self._algo_internal
+            ),
+        }
+
+    # ===================== playback_token 검증 =====================
+
+    def verify_internal_token(
+        self, token: str, expected_type: Literal["access", "refresh"]
+    ) -> InternalTokenPayload:
+        """
+        [내부 세션] 토큰의 기술적 유효성 및 타입을 검증
+        - 서명 위조, 만료 여부, 토큰 용도(access/refresh) 확인
+        """
+        try:
+            decoded = jwt.decode(token, self._secret, algorithms=[self._algo_internal])
+            payload = cast("InternalTokenPayload", decoded)
+
+            if payload.get("type") != expected_type:
+                raise ValueError(f"토큰 타입 불일치: {expected_type} 필요")
+
+            return payload
+        except jwt.ExpiredSignatureError:
+            raise ValueError("토큰이 만료되었습니다.") from None
+        except InvalidTokenError as e:
+            raise ValueError(f"유효하지 않은 토큰입니다: {str(e)}") from e

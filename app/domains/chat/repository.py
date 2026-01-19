@@ -13,9 +13,11 @@ RATE_LIMIT_SECONDS = 2
 def _chat_key(room_id: str) -> str:
     return f"chat:{room_id}"
 
+
 async def rate_limit_ok(room_id: str, user_id: str) -> bool:
     key = f"chat:rate:{room_id}:{user_id}"
     return bool(await redis_client.set(key, "1", ex=RATE_LIMIT_SECONDS, nx=True))
+
 
 async def append_chat_message(room_id: str, evt: dict[str, Any]) -> None:
     """

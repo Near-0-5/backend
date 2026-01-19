@@ -7,7 +7,6 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.domains.chat.manager import ConnectionManager
 from app.domains.chat.repository import append_chat_message, get_recent_messages, rate_limit_ok
 from app.domains.chat.schemas import ClientMessage, ServerEvent
-
 from app.domains.streams.models import StreamChannel
 
 
@@ -82,14 +81,16 @@ class ChatService:
 
                 ok = await rate_limit_ok(room_id, user_id)
                 if not ok:
-                    await ws.send_json({
-                        "type": "system",
-                        "room_id": room_id,
-                        "user_id": user_id,
-                        "text": "메시지는 2초에 1개만 보낼 수 있어",
-                        "ts": now_iso(),
-                        "message_id": None,
-                    })
+                    await ws.send_json(
+                        {
+                            "type": "system",
+                            "room_id": room_id,
+                            "user_id": user_id,
+                            "text": "메시지는 2초에 1개만 보낼 수 있어",
+                            "ts": now_iso(),
+                            "message_id": None,
+                        }
+                    )
                     continue
 
                 evt = ServerEvent(
@@ -147,7 +148,7 @@ class ChatService:
             stream_id = int(room_id)
         except ValueError:
             raise ValueError("Invalid stream_id")
-        
+
         # 존재 확인
         exists = await StreamChannel.exists(id=stream_id)
         if not exists:

@@ -5,7 +5,7 @@ from tortoise import fields, models
 
 from app.domains.streams.models import CategoryType
 
-# 마음에 안 들어.
+
 if TYPE_CHECKING:
     from app.domains.notifications.models import UserNoti
     from app.domains.artists.models import Artist
@@ -26,10 +26,9 @@ class GenderChoices(str, Enum):
 
 class User(models.Model):
     id = fields.IntField(pk=True)
-    provider = fields.CharEnumField(ProviderChoice, max_length=20)  # kakao, google 등
+    provider = fields.CharEnumField(ProviderChoice, max_length=20)
     provider_id = fields.CharField(max_length=255, unique=True)
     email = fields.CharField(max_length=100, null=True)
-    real_name = fields.CharField(max_length=50, null=True)
     nickname = fields.CharField(max_length=30, unique=True)
     profile_img_url = fields.CharField(max_length=255, null=True)
     bio = fields.TextField(null=True, description="자기소개")
@@ -47,7 +46,7 @@ class User(models.Model):
     followed_artists: fields.ManyToManyRelation["Artist"] = fields.ManyToManyField(
         "models.Artist",
         through="follows",
-        related_name="followers",
+        related_name="follower_users",
         forward_key="artist_id",
         backward_key="user_id",
     )

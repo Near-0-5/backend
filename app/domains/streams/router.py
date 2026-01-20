@@ -1,18 +1,22 @@
-"""streams 도메인 HTTP 라우터.
+from typing import Any
 
-여기에 넣을 것:
-- APIRouter(prefix='...', tags=[...])
-- endpoints 정의(GET/POST/PATCH/DELETE)
-- Depends로 인증/권한 체크
-- service 함수를 호출해서 결과 반환
+from fastapi import APIRouter, Depends
 
-예:
-- GET /streams
-- POST /streams
-"""
+from app.api import deps
+from app.domains.streams import deps as streams_deps
+from app.domains.streams.service import StreamService
+from app.domains.users.models import User
 
-from fastapi import APIRouter
+router = APIRouter(prefix="/streams", tags=["Streaming"])
 
-router = APIRouter(prefix="/streams", tags=["streams"])
 
-# TODO: endpoints 추가
+@router.get("/{concert_id}/credentials", summary="스트림 시청 권한 확인 - 토큰 발급")
+async def get_stream_access(
+    concert_id: int,
+    current_user: User = Depends(deps.get_current_user),
+    service: StreamService = Depends(streams_deps.get_streams_service),
+) -> dict[str, Any]:
+    """
+    해당 콘서트의 시청 자격 검증 -> IVS 재생 토큰 + 채팅용 세션 토큰 반환
+    """
+    return await service.get_viewing_credentials(concert_id, current_user)

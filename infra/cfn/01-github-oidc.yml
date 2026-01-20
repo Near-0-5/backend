@@ -64,6 +64,9 @@ Resources:
                   - ivs:GetChannel
                   - ivs:ListChannels
                   - ivs:GetStreamKey
+                  - ivs:ListStreamKeys
+                  - ivs:GetPlaybackKeyPair
+                  - ivs:ListPlaybackKeyPairs
                 Resource: "*"
 
 Outputs:

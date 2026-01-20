@@ -41,6 +41,7 @@ Resources:
       Name: near05-channel
       Type: STANDARD
       LatencyMode: LOW
+      Authorized: True
       RecordingConfigurationArn: !Ref MyIVSRecordingConfig
 
   # EC2 서버 (AMI ID 자동 조회 방식)

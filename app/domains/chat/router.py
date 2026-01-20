@@ -1,18 +1,28 @@
-"""chat 도메인 HTTP 라우터.
+from fastapi import APIRouter, HTTPException, status
 
-여기에 넣을 것:
-- APIRouter(prefix='...', tags=[...])
-- endpoints 정의(GET/POST/PATCH/DELETE)
-- Depends로 인증/권한 체크
-- service 함수를 호출해서 결과 반환
-
-예:
-- GET /chat
-- POST /chat
-"""
-
-from fastapi import APIRouter
+from app.domains.streams.models import StreamChannel
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# TODO: endpoints 추가
+
+@router.get("/streaming/{stream_id}/validate")
+async def validate_chat_room(stream_id: str) -> dict[str, bool]:
+    """
+    프런트용 사전 검증 API.
+    - stream_id가 잘못되면 400
+    - 스트림이 없으면 404
+    - (추후) 권한 없으면 403
+    """
+
+    try:
+        sid = int(stream_id.strip())
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid stream_id"
+        ) from err
+
+    exists = await StreamChannel.exists(id=sid)
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="stream not found")
+
+    return {"ok": True}

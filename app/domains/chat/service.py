@@ -1,130 +1,141 @@
+import asyncio
 import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect, status
+from pydantic_core import ValidationError
 
-from app.domains.chat.manager import ConnectionManager
-from app.domains.chat.repository import append_chat_message, get_recent_messages
+from app.domains.chat.manager import ConnectionLimitError, ConnectionManager
+from app.domains.chat.repository import append_chat_message, get_recent_messages, rate_limit_ok
 from app.domains.chat.schemas import ClientMessage, ServerEvent
+from app.domains.streams.models import StreamChannel
 
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+IDLE_TIMEOUT_SECONDS: int | None = 60 * 30
+
+
+class ChatPrecheckError(Exception):
+    """핸드셰이크 전에 검증할 때 쓰는 도메인 에러."""
+
+
+class InvalidRoomId(ChatPrecheckError):
+    pass
+
+
+class StreamNotFound(ChatPrecheckError):
+    pass
+
+
 class ChatService:
-    """
-    개선사항:
-        1) room_id == concert_id로 연결하여 공연 존재 여부를 확인 가능하도록 수정.
-        2) user_id를 JWT에서 추출하도록 수정.
-        3) user_id당 room 참여 제한.
-        4) 메시지 전송 제한.
-        5) 채팅방 입장은 본인에게만, 퇴장은 삭제
-    """
-
     def __init__(self, manager: ConnectionManager) -> None:
-        """
-        ChatService 생성자.
-
-        Args:
-            manager (ConnectionManager): room_id별 WebSocket 연결 목록 관리 및 브로드캐스트를
-            담당하는 매니저
-        """
         self.manager = manager
 
+    # 핸드셰이크 전에 호출 가능한 검증
+    async def precheck_room(self, room_id: str) -> str:
+        room_id = room_id.strip()
+
+        try:
+            stream_id = int(room_id)
+        except ValueError as err:
+            raise InvalidRoomId("Invalid stream_id") from err
+
+        exists = await StreamChannel.exists(id=stream_id)
+        if not exists:
+            raise StreamNotFound("stream not found")
+
+        return str(stream_id)
+
+    # 검증 API에서 ws 접속 전 사전에 HTTP-Exception를 받을 수 있음.
+    def precheck_to_http_exc(self, err: ChatPrecheckError) -> HTTPException:
+        if isinstance(err, InvalidRoomId):
+            return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err))
+        if isinstance(err, StreamNotFound):
+            return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err))
+        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="bad request")
+
     async def handle_connection(self, ws: WebSocket, room_id: str, user_id: str) -> None:
-        """
-        특정 room_id 채팅방에 대해 WebSocket 연결을 처리하고,
-        클라이언트 메시지를 수신하여 같은 방의 모든 접속자에게 브로드캐스트하는
-        메인 루프를 수행한다.
-
-        Args:
-            ws (WebSocket): 유저 1명과 서버 사이의 WebSocket 연결 객체(통로)
-            room_id (str): 채팅방 식별자 (현재는 쿼리로 입력받는 값)
-            user_id (str): 유저 식별자 (현재는 쿼리로 입력받는 값)
-
-        Flow:
-            1) room_id / user_id 문자열을 정리(strip)한다.
-            2) _authorize_room_access로 해당 유저가 room에 참여 가능한지(인가) 확인한다.
-            3) manager.connect로 연결을 등록하고, 입장(system) 이벤트를 브로드캐스트한다.
-            4) Redis에서 최근 메시지 50개를 조회(get_recent_messages)하여,
-            접속한 클라이언트(ws)에만 전송한다.
-            5) 무한 루프에서 클라이언트 메시지를 수신(receive_json)한다.
-            6) ClientMessage 스키마로 입력을 검증한 뒤, ServerEvent를 구성한다.
-            7) 구성한 ServerEvent를 Redis에 저장(append_chat_message)하고,
-            manager.broadcast_json으로 방 전체에 전송한다.
-            8) WebSocketDisconnect 발생 시 연결을 해제하고 퇴장(system) 이벤트를 브로드캐스트한다.
-            9) 기타 예외 발생 시 연결을 정리하고 가능하면 소켓을 close한다.
-
-        Note:
-            - 현재 구현은 user_id/room_id를 클라이언트 입력에 의존함.
-            운영 단계에서는 인증(JWT)으로 user_id를 확정하고, 인가로 room 접근을 제한하는 방식으로
-            확장해아 함.
-        """
         room_id = room_id.strip()
         user_id = user_id.strip()
 
-        await self._authorize_room_access(user_id=user_id, room_id=room_id)
-
-        await self.manager.connect(room_id, ws)
-        await self._broadcast_system(room_id, user_id, f"{user_id} joined")
+        try:
+            await self.manager.connect(room_id, ws)
+        except ConnectionLimitError:
+            # accept 전에 터질 수도 있고, accept 후 1008로 닫혔을 수도 있음.
+            return
 
         try:
+            # 코드 최적화를 위한 시스템 메시지 전송 함수임.
+            async def sys(text: str) -> None:
+                await self.manager.send_system_to_self(
+                    ws, room_id=room_id, user_id=user_id, text=text
+                )
+
+            # recent 알림 (본인에게만)
             items = await get_recent_messages(room_id, limit=50)
             await ws.send_json({"type": "recent", "room_id": room_id, "items": items})
 
-            while True:
-                data = await ws.receive_json()
-                msg = ClientMessage.model_validate(data)
+            # 연결 성공 알림 (본인에게만)
+            await sys("채팅방에 입장하였습니다.")
 
-                evt = ServerEvent(
-                    type="message",
+            # main loop
+            while True:
+                # 메시지 요청시간 초과하면 루프 끊어버림;
+                try:
+                    if IDLE_TIMEOUT_SECONDS is None:
+                        data = await ws.receive_json()
+                    else:
+                        data = await asyncio.wait_for(
+                            ws.receive_json(), timeout=IDLE_TIMEOUT_SECONDS
+                        )
+                except TimeoutError:
+                    await sys("무응답 시간 초과")
+                    break
+
+                # 메시지 형식 검증 후 이상하면 예외처리 후 continue
+                try:
+                    msg = ClientMessage.model_validate(data)
+                except ValidationError:
+                    await sys("메시지 형식이 올바르지 않숩나다")
+                    continue
+
+                # rate limit 검증
+                ok = await rate_limit_ok(room_id, user_id)
+                if not ok:
+                    await sys("메시지는 2초에 1개만 보낼 수 있습니다")
+                    continue
+
+                # event build
+                evt = self._build_message_event(
                     room_id=room_id,
                     user_id=user_id,
                     text=msg.text,
-                    ts=now_iso(),
-                    message_id=str(uuid.uuid4()),
-                ).model_dump()
+                )
 
-                await append_chat_message(room_id, evt)
+                # 저장 실패해도 broadcast는 진행시켜
+                with suppress(Exception):
+                    await append_chat_message(room_id, evt)
 
                 await self.manager.broadcast_json(room_id, evt)
 
         except WebSocketDisconnect:
             await self.manager.disconnect(room_id, ws)
-            await self._broadcast_system(room_id, user_id, f"{user_id} left")
 
         except Exception:
             await self.manager.disconnect(room_id, ws)
-            #! ruff에서 하라고 해서 수정하기는 했는데 예외처리 메시지 전달로 수정해야 함.
-            with suppress(Exception):
-                await ws.close()
+            await self.manager.close_safe(ws, code=1011)
 
-    async def _broadcast_system(self, room_id: str, user_id: str, text: str) -> None:
-        """
-        개선사항: 시스템 알람같은 경우 어떤식으로 채팅방에서 구현할지 논의 필요
-
-        시스템(system) 이벤트(예: 입장/퇴장/공연 시작 알림)를 구성하여,
-        해당 room_id의 모든 접속자에게 브로드캐스트한다.(유지할지 논의 필요)
-
-        Args:
-            room_id (str): 채팅방 식별자
-            user_id (str): 이벤트 주체 유저 식별자
-            text (str): 시스템 메시지 본문 (예: "{user_id} joined")
-
-        Flow:
-            1) ServerEvent(type="system") 형태의 이벤트 payload를 구성한다.
-            2) manager.broadcast_json으로 room_id 전체에 전송한다.
-        """
-        evt = ServerEvent(
-            type="system",
+    def _build_message_event(self, room_id: str, user_id: str, text: str) -> dict[str, Any]:
+        return ServerEvent(
+            type="message",
             room_id=room_id,
             user_id=user_id,
             text=text,
             ts=now_iso(),
-            message_id=None,
+            message_id=str(uuid.uuid4()),
         ).model_dump()
-        await self.manager.broadcast_json(room_id, evt)
-
-    async def _authorize_room_access(self, user_id: str, room_id: str) -> None: ...

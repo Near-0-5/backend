@@ -23,10 +23,12 @@ class KakaoIntegration:
                     "client_id": self.client_id,
                     "redirect_uri": self.redirect_uri,
                     "code": code,
+                    "client_secret": settings.KAKAO_CLIENT_SECRET,
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             response.raise_for_status()
+
             result = response.json().get("access_token")
             return str(result) if result else ""
 
@@ -34,7 +36,11 @@ class KakaoIntegration:
     async def get_user_info(self, access_token: str) -> dict[str, Any]:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                self.USER_INFO_URL, headers={"Authorization": f"Bearer {access_token}"}
+                self.USER_INFO_URL,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-type": "application/x-www-form-urlencoded;charset=utf-8",
+                },
             )
             response.raise_for_status()
             return cast("dict[str, Any]", response.json())

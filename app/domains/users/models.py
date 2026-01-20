@@ -7,8 +7,8 @@ from app.domains.streams.models import CategoryType
 
 
 if TYPE_CHECKING:
-    from app.domains.notifications.models import UserNoti
     from app.domains.artists.models import Artist
+    from app.domains.notifications.models import UserNoti
 
 
 # 소셜 제공자
@@ -26,9 +26,10 @@ class GenderChoices(str, Enum):
 
 class User(models.Model):
     id = fields.IntField(pk=True)
-    provider = fields.CharEnumField(ProviderChoice, max_length=20)
+    provider = fields.CharEnumField(ProviderChoice, max_length=20)  # kakao, google 등
     provider_id = fields.CharField(max_length=255, unique=True)
     email = fields.CharField(max_length=100, null=True)
+    real_name = fields.CharField(max_length=50, null=True)
     nickname = fields.CharField(max_length=30, unique=True)
     profile_img_url = fields.CharField(max_length=255, null=True)
     bio = fields.TextField(null=True, description="자기소개")
@@ -60,7 +61,7 @@ class User(models.Model):
 class UserCatFav(models.Model):
     id = fields.IntField(pk=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
-        "models.User", related_name="cat_favs"
+        "models.User", related_name="fav_categories"
     )
     category = fields.CharEnumField(CategoryType)  # Enum 사용
     created_at = fields.DatetimeField(auto_now_add=True)
@@ -71,7 +72,7 @@ class UserCatFav(models.Model):
 
 class UserDeleteLog(models.Model):
     id = fields.IntField(pk=True)
-    user_id = fields.IntField()     # 로그가 남아야함에 FK 미사용
+    user_id = fields.IntField()  # 로그가 남아야함에 FK 미사용
     email = fields.CharField(max_length=100, null=True)
     reason = fields.CharField(max_length=200, null=True)
     deleted_at = fields.DatetimeField()

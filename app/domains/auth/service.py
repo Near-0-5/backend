@@ -4,7 +4,7 @@ from datetime import datetime
 from app.core.security import create_access_token
 from app.domains.auth.schemas import TokenResponse
 from app.domains.notifications.models import UserNoti
-from app.domains.users.models import User
+from app.domains.users.models import ProviderChoice, User
 from app.integrations.kakao import kakao_client
 
 
@@ -46,7 +46,7 @@ class AuthService:
         # DB 저장
         user, created = await User.update_or_create(
             provider_id=provider_id,
-            provider="kakao",
+            provider=ProviderChoice.KAKAO,
             defaults={
                 "email": kakao_account.get("email"),
                 "real_name": kakao_account.get("real_name"),

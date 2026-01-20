@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     # social_login
     KAKAO_REST_API_KEY: str
     KAKAO_REDIRECT_URI: str
+    KAKAO_CLIENT_SECRET: str
 
     @computed_field  # type: ignore[prop-decorator]
     @property

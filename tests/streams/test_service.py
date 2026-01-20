@@ -62,6 +62,7 @@ async def test_create_concert_and_channel_admin_success(monkeypatch):
         "title": "test",
         "access_level": AccessLevel.PUBLIC,
     }
+    data.artist_ids = []
     data.channel_config = MagicMock()
     data.channel_config.latency_mode.value = "LOW"
     data.channel_config.channel_type.value = "STANDARD"

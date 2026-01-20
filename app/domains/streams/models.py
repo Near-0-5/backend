@@ -103,6 +103,9 @@ class Concert(models.Model):
         description="이 공연에 참여하는 모든 출연진 목록",
     )
 
+    if TYPE_CHECKING:
+        stream_channel: "StreamChannel"  # 역참조
+
     class Meta:
         table = "concerts"
 

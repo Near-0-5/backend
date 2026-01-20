@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ArtistSimple(BaseModel):
@@ -31,3 +31,4 @@ class UserMeResponse(BaseModel):
 
     class Config:
         from_attributes = True  # Tortoise 객체를 자동으로 Pydantic으로 변환
+        model_config = ConfigDict(from_attributes=True)

@@ -176,3 +176,4 @@ async def test_kakao_callback_endpoint(mocker):
     assert response.status_code == 200
     assert response.json()["access_token"] == "fake_jwt"
     mock_service.assert_called_once_with("test_code")
+

@@ -5,7 +5,6 @@ from tortoise import fields, models
 
 from app.domains.streams.models import CategoryType
 
-
 if TYPE_CHECKING:
     from app.domains.artists.models import Artist
     from app.domains.notifications.models import UserNoti
@@ -69,6 +68,7 @@ class UserCatFav(models.Model):
     class Meta:
         table = "user_cat_favs"
         unique_together = (("user", "category"),)  # 동일 유저 동일 카테고리 중복 추가 방지
+
 
 class UserDeleteLog(models.Model):
     id = fields.IntField(pk=True)

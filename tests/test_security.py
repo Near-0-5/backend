@@ -14,6 +14,7 @@ def test_create_access_token():
     assert payload["sub"] == subject
     assert "exp" in payload
 
+
 def test_create_access_token_with_expiry():
     subject = "test_user"
     expires_delta = timedelta(minutes=10)

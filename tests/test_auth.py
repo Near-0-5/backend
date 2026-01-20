@@ -21,10 +21,7 @@ async def test_kakao_integration_coverage_boost(client, mocker):
     mock_response_user.status_code = 200
     mock_response_user.json.return_value = {
         "id": 12345,
-        "kakao_account": {
-            "email": "test@kakao.com",
-            "profile": {"nickname": "테스트"}
-        }
+        "kakao_account": {"email": "test@kakao.com", "profile": {"nickname": "테스트"}},
     }
     mock_response_user.raise_for_status = MagicMock()
 
@@ -46,6 +43,7 @@ async def test_kakao_integration_coverage_boost(client, mocker):
     assert user_info["id"] == 12345
     assert user_info["kakao_account"]["email"] == "test@kakao.com"
 
+
 @pytest.mark.anyio
 async def test_kakao_callback_endpoint(client, mocker, initialize_tests):
     """엔드포인트 호출 시에도 커버리지가 유지되도록 처리"""
@@ -53,7 +51,10 @@ async def test_kakao_callback_endpoint(client, mocker, initialize_tests):
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_client.__aenter__.return_value = mock_client
     mock_client.post.return_value = MagicMock(status_code=200, json=lambda: {"access_token": "t"})
-    mock_client.get.return_value = MagicMock(status_code=200, json=lambda: {"id": 1, "kakao_account": {"email": "e", "profile": {"nickname": "n"}}})
+    mock_client.get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {"id": 1, "kakao_account": {"email": "e", "profile": {"nickname": "n"}}},
+    )
 
     mocker.patch("httpx.AsyncClient", return_value=mock_client)
 

@@ -19,6 +19,7 @@ async def test_get_access_token_success(mocker):
         assert token == "mocked_kakao_token"
         mock_post.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_get_user_info_success(mocker):
     mock_response = mocker.Mock()

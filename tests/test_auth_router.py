@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
 
@@ -14,14 +16,17 @@ async def test_kakao_login_redirect():
     assert response.status_code in [302, 307]
     assert "kauth.kakao.com" in response.headers["location"]
 
+
 @pytest.mark.asyncio
 async def test_kakao_callback_endpoint():
     # 실제 카카오를 호출하지 않도록 서비스 로직 모킹
-    with patch("app.domains.auth.service.auth_service.process_kakao_login", new_callable=AsyncMock) as mock_service:
+    with patch(
+        "app.domains.auth.service.auth_service.process_kakao_login", new_callable=AsyncMock
+    ) as mock_service:
         mock_service.return_value = {
             "access_token": "test_token",
             "token_type": "bearer",
-            "is_new_user": False
+            "is_new_user": False,
         }
 
         from httpx import ASGITransport

@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import os
 import time
@@ -40,6 +41,10 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASSWORD: str
 
+    # REDIS 설정
+    REDIS_HOST: str
+    REDIS_PORT: str
+
     AUTO_SCHEMA: str = "0"  # 개발 초기에만 1로 켜서 generate_schemas를 쓰는 경우에 사용
 
     # 보안 설정
@@ -56,6 +61,7 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str = "ap-northeast-2"
+    IVS_PLAYBACK_PRIVATE_KEY_B64: str = Field(..., validation_alias="IVS_PLAYBACK_PRIVATE_KEY_B64")
     S3_RECORDING_BUCKET: str
 
     # social_login
@@ -67,6 +73,19 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL(self) -> str:
         return f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def REDIS_URL(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
+    @property
+    def IVS_PLAYBACK_PRIVATE_KEY(self) -> str:
+        """Base64로 저장된 키를 원본 PEM 문자열로 디코딩"""
+        try:
+            return base64.b64decode(self.IVS_PLAYBACK_PRIVATE_KEY_B64).decode("utf-8")
+        except Exception as e:
+            raise RuntimeError(f"IVS PRIVATE KEY 디코딩 실패: {e}") from e
 
 
 settings = Settings()

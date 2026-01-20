@@ -13,7 +13,9 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
+    if: | 
+      github.event.pull_request.merged == true &&
+      vars.ENABLE_EC2_DEPLOY == 'true'
 
     runs-on: ubuntu-latest
     steps:
@@ -58,16 +60,8 @@ jobs:
             set -e
             cd ~/app
             
-            # 서버에서 AWS ECR 로그인
-            aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $ECR_REGISTRY
-
-            # Docker 이미지 Pull            
-            if ! docker pull $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG; then
-              echo "[Fail] Failed to pull Docker image"
-              exit 1
-            fi
-            
             # IMAGE_TAG를 docker-compose에 전달
+            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml pull
             IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml up -d --wait
             
             # 오래된 이미지 정리            

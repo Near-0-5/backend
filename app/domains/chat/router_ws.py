@@ -1,13 +1,20 @@
-"""chat 도메인 WebSocket 라우터.
+from fastapi import APIRouter, Query, WebSocket
 
-여기에 넣을 것:
-- websocket endpoint (예: /ws/chat/{stream_id})
-- 연결 시 토큰 검증(Authorization header 또는 query param)
-- 메시지 수신/검증 후 브로드캐스트(service 호출)
-"""
-
-from fastapi import APIRouter
+from app.domains.chat.manager import ConnectionLimits, ConnectionManager
+from app.domains.chat.service import ChatPrecheckError, ChatService
 
 router = APIRouter(prefix="", tags=["chat"])
 
-# TODO: WebSocket endpoint 추가 (FastAPI WebSocket 사용)
+manager = ConnectionManager(limits=ConnectionLimits(max_total=10_000, max_per_room=1_000))
+service = ChatService(manager)
+
+
+@router.websocket("/streaming/{stream_id}/chat")
+async def chat_ws(ws: WebSocket, stream_id: str, user_id: str = Query(...)) -> None:
+    """검증 후 WS 연결해벌여"""
+    try:
+        room_id = await service.precheck_room(stream_id)
+    except ChatPrecheckError as err:
+        raise service.precheck_to_http_exc(err) from err
+
+    await service.handle_connection(ws=ws, room_id=room_id, user_id=user_id)

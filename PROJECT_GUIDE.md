@@ -35,14 +35,14 @@ REDIS_PORT=6379
 
 ### 4) 도커 빌드
 ```md
-1. 서버 빌드/실행: `docker compose -f docker/docker-compose.local.yml up --build`
+1. 서버 빌드/실행: `docker compose -f docker/docker-compose.dev.yml up --build`
 2. 컨테이너 목록 확인: `docker ps`
 3. 로그 확인: `docker logs <컨테이너 이름>`
 ```
 
 ### 5) 마이그레이션
 ```md
-1. docker db만 켜기: `docker compose -f docker/docker-compose.local.yml up -d db`
+1. docker db만 켜기: `docker compose -f docker/docker-compose.dev.yml up -d db`
 2. 마이그레이션 적용: `uv run aerich upgrade`
 
 ```

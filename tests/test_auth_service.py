@@ -94,7 +94,11 @@ async def test_process_kakao_login_nickname_collision_and_female(mocker):
     # 1. 닉네임이 이미 존재하는데, provider_id가 다른 경우 (닉네임 뒤에 랜덤값 붙는 로직 실행)
     collision_user = mocker.Mock()
     collision_user.provider_id = "different_id"
-    mocker.patch("app.domains.users.models.User.get_or_none", new_callable=AsyncMock, return_value=collision_user)
+    mocker.patch(
+        "app.domains.users.models.User.get_or_none",
+        new_callable=AsyncMock,
+        return_value=collision_user,
+    )
 
     mock_user = mocker.Mock()
     mock_user.id = 2
@@ -176,4 +180,3 @@ async def test_kakao_callback_endpoint(mocker):
     assert response.status_code == 200
     assert response.json()["access_token"] == "fake_jwt"
     mock_service.assert_called_once_with("test_code")
-

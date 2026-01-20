@@ -14,7 +14,7 @@ async def chat_ws(ws: WebSocket, stream_id: str, user_id: str = Query(...)) -> N
     """검증 후 WS 연결해벌여"""
     try:
         room_id = await service.precheck_room(stream_id)
-    except ChatPrecheckError as e:
-        raise service.precheck_to_http_exc(e)
+    except ChatPrecheckError as err:
+        raise service.precheck_to_http_exc(err) from err
 
     await service.handle_connection(ws=ws, room_id=room_id, user_id=user_id)

@@ -97,7 +97,9 @@ class ConnectionManager:
                     if not room_set:
                         self._rooms.pop(room_id, None)
 
-    async def send_system_to_self(self, ws: WebSocket, *, room_id: str, user_id: str, text: str) -> None:
+    async def send_system_to_self(
+        self, ws: WebSocket, *, room_id: str, user_id: str, text: str
+    ) -> None:
         """소켓(클라)마다 고유한 서버 알림 줘버려"""
         payload = ServerEvent(
             type="system",

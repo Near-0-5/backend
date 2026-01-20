@@ -1,12 +1,11 @@
+import asyncio
 import uuid
 from contextlib import suppress
-from typing import Any
 from datetime import UTC, datetime
-
-import asyncio  # <<< (NEW) idle timeout 처리용
+from typing import Any
 
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect, status
-from pydantic_core import ValidationError  # pydantic v2
+from pydantic_core import ValidationError
 
 from app.domains.chat.manager import ConnectionLimitError, ConnectionManager
 from app.domains.chat.repository import append_chat_message, get_recent_messages, rate_limit_ok
@@ -18,16 +17,19 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-# <<< (NEW) 유휴 연결 정리용 타임아웃(필요 없으면 None으로)
-IDLE_TIMEOUT_SECONDS: int | None = 60 * 30  # 30분
+IDLE_TIMEOUT_SECONDS: int | None = 60 * 30
 
 
 class ChatPrecheckError(Exception):
     """핸드셰이크 전에 검증할 때 쓰는 도메인 에러."""
 
-class InvalidRoomId(ChatPrecheckError): pass
 
-class StreamNotFound(ChatPrecheckError): pass
+class InvalidRoomId(ChatPrecheckError):
+    pass
+
+
+class StreamNotFound(ChatPrecheckError):
+    pass
 
 
 class ChatService:
@@ -40,8 +42,8 @@ class ChatService:
 
         try:
             stream_id = int(room_id)
-        except ValueError:
-            raise InvalidRoomId("Invalid stream_id")
+        except ValueError as err:
+            raise InvalidRoomId("Invalid stream_id") from err
 
         exists = await StreamChannel.exists(id=stream_id)
         if not exists:
@@ -70,7 +72,9 @@ class ChatService:
         try:
             # 코드 최적화를 위한 시스템 메시지 전송 함수임.
             async def sys(text: str) -> None:
-                await self.manager.send_system_to_self(ws, room_id=room_id, user_id=user_id, text=text)
+                await self.manager.send_system_to_self(
+                    ws, room_id=room_id, user_id=user_id, text=text
+                )
 
             # recent 알림 (본인에게만)
             items = await get_recent_messages(room_id, limit=50)
@@ -86,8 +90,10 @@ class ChatService:
                     if IDLE_TIMEOUT_SECONDS is None:
                         data = await ws.receive_json()
                     else:
-                        data = await asyncio.wait_for(ws.receive_json(), timeout=IDLE_TIMEOUT_SECONDS)
-                except asyncio.TimeoutError:
+                        data = await asyncio.wait_for(
+                            ws.receive_json(), timeout=IDLE_TIMEOUT_SECONDS
+                        )
+                except TimeoutError:
                     await sys("무응답 시간 초과")
                     break
 
@@ -104,7 +110,7 @@ class ChatService:
                     await sys("메시지는 2초에 1개만 보낼 수 있습니다")
                     continue
 
-                # event build 
+                # event build
                 evt = self._build_message_event(
                     room_id=room_id,
                     user_id=user_id,

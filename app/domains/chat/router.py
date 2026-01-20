@@ -16,8 +16,10 @@ async def validate_chat_room(stream_id: str) -> dict[str, bool]:
 
     try:
         sid = int(stream_id.strip())
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid stream_id")
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid stream_id"
+        ) from err
 
     exists = await StreamChannel.exists(id=sid)
     if not exists:

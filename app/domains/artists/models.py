@@ -16,7 +16,7 @@ class GroupType(str, Enum):
 
 
 class Artist(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     stage_name = fields.CharField(max_length=100, description="활동명")
     profile_img_url = fields.CharField(max_length=255, null=True)
     agency = fields.CharField(max_length=100, null=True)
@@ -32,7 +32,7 @@ class Artist(models.Model):
 
 
 class Follow(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         "models.User", related_name="follows"
     )

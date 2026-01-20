@@ -74,6 +74,7 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "C4", "SIM", "TCH"]
+ignore = ["B008"]  # FastAPI의 Depends 사용을 위해 추가
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]

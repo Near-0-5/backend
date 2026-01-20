@@ -23,6 +23,9 @@ class ConcertCreateRequest(BaseModel):
     start_at: datetime
     end_at: datetime | None = None
 
+    # 검색/필터링을 위한 아티스트 연결
+    artist_ids: list[int] = Field(default_factory=list, description="출연 아티스트 ID 목록")
+
     # 채널 설정 (기본값 제공)
     channel_config: ChannelConfig = Field(default_factory=ChannelConfig)
 

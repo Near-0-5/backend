@@ -1,5 +1,7 @@
 from typing import Any
 
+from app.domains.streams.models import ConcertArtist
+
 from app.domains.streams.models import AccessLevel, Concert, StreamChannel
 from app.domains.streams.permissions import StreamPermission
 from app.domains.streams.schemas import ConcertCreateRequest
@@ -21,8 +23,13 @@ class StreamService:
 
         # Concert 생성
         # channel_config는 IVS 설정용이므로 DB 모델 생성시에는 제외
-        concert_dict = data.model_dump(exclude={"channel_config"})
+        concert_dict = data.model_dump(exclude={"channel_config", "artist_ids"})
         concert = await Concert.create(**concert_dict)
+
+        # 아티스트 매핑 생성
+        if data.artist_ids:
+            for artist_id in data.artist_ids:
+                await ConcertArtist.create(concert=concert, artist_id=artist_id)
 
         # IVS 채널 생성 호출
         config = data.channel_config

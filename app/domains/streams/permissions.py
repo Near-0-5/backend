@@ -1,10 +1,33 @@
-"""streams 권한 체크 모듈.
+from fastapi import HTTPException
 
-여기에 넣을 것:
-- 스트리밍 시청 가능 여부(유료/무료, 구매, 권한 등)
-- 어드민만 가능한 작업(생성/수정/삭제) 체크
-- 채팅 참여 가능 여부(시청권한 기반)
+from app.domains.streams.models import AccessLevel, Concert
+from app.domains.users.models import User
 
-구조:
-- router/service에서 if문으로 흩어놓지 말고 여기 함수로 모으기.
-"""
+
+class StreamPermission:
+    @staticmethod
+    def must_be_admin(user: User) -> None:
+        if not user.is_superuser:
+            raise HTTPException(403, "관리자만 접근이 가능합니다.")
+
+    @staticmethod
+    async def verify_playback_access(user: User, concert: Concert) -> None:
+        """
+        유저가 IVS 토큰을 발급받을 자격이 있는지 확인
+        """
+        if user.is_superuser or concert.access_level == AccessLevel.PUBLIC:
+            return
+
+        if concert.access_level == AccessLevel.ADMIN_ONLY:
+            raise HTTPException(403, "테스트 중인 방송입니다.")
+
+        # from app.domains.orders.models import UserTicket
+        if concert.access_level == AccessLevel.SPECIFIC:
+            # TODO: 유료/무료 공연 기능 추가 -> 티켓 구매 여부 확인
+            # has_ticket = await UserTicket.filter(
+            #     user=user, concert=concert, is_valid=True
+            # ).exists()
+            # 지금은 없으니까 그냥 False로 에러 띄움
+            has_ticket = False
+            if not has_ticket:
+                raise HTTPException(402, "티켓 구매가 필요한 공연입니다.")

@@ -1,8 +1,6 @@
 from typing import Any
 
-from app.domains.streams.models import ConcertArtist
-
-from app.domains.streams.models import AccessLevel, Concert, StreamChannel
+from app.domains.streams.models import AccessLevel, Concert, ConcertArtist, StreamChannel
 from app.domains.streams.permissions import StreamPermission
 from app.domains.streams.schemas import ConcertCreateRequest
 from app.domains.users.models import User

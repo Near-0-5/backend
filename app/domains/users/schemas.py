@@ -1,9 +1,34 @@
-"""users 도메인 Pydantic 스키마.
+from datetime import datetime
 
-여기에 넣을 것:
-- Request/Response 모델들
-- 예: CreateRequest, UpdateRequest, ListResponse, DetailResponse
+from pydantic import BaseModel, ConfigDict
 
-팁:
-- 외부로 노출되는 응답 스키마는 항상 schemas에 모으는게 추적하기 쉬움.
-"""
+
+class ArtistSimple(BaseModel):
+    id: int
+    name: str
+    profile_image: str | None
+
+
+class NotiSettings(BaseModel):
+    new_content_from_favorite_artists: bool
+    live_start_notification: bool
+    marketing_consent: bool
+
+
+class UserMeResponse(BaseModel):
+    id: int
+    email: str | None
+    nickname: str
+    name: str | None
+    profile_image: str | None
+    joined_at: datetime
+    bio: str | None
+
+    # 관계형 데이터
+    favorite_artists: list[ArtistSimple]
+    preferred_categories: list[str]
+    notification_settings: NotiSettings
+
+    class Config:
+        from_attributes = True  # Tortoise 객체를 자동으로 Pydantic으로 변환
+        model_config = ConfigDict(from_attributes=True)

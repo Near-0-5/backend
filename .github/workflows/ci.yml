@@ -107,6 +107,11 @@ jobs:
 
       AUTO_SCHEMA: "1"
 
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      KAKAO_REST_API_KEY: "a18f1dc75d852770dff6cce3d85903bb"
+      KAKAO_REDIRECT_URI: "http://localhost:8000/auth/kakao/callback"
+      KAKAO_CLIENT_SECRET: "EvM2oU5ESoSIhEMb7EfClRf6T6pVVX4Q"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

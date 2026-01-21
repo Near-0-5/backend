@@ -1,24 +1,47 @@
-"""공통 Depends 모음.
-
-여기에 넣을 것(추천):
-- get_current_user: JWT로 현재 로그인 유저 가져오기
-- require_admin: 관리자 권한 체크
-- pagination params, common query params 등
-
-팁:
-- FastAPI는 Django의 middleware/permission 느낌을 Depends로 많이 풀어냄.
-"""
-
 from __future__ import annotations
 
+from typing import Annotated
 
-# TODO: JWT 인증 로직이 생기면 여기서 current user dependency를 제공
-def get_current_user() -> None:
-    """현재 로그인 유저를 반환하는 Depends 자리.
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import InvalidTokenError
 
-    구현 예:
-    - Authorization: Bearer <token> 파싱
-    - 토큰 검증 후 user_id 추출
-    - DB에서 User 조회
+from app.core.config import settings
+from app.core.security import ALGORITHM
+from app.domains.users.models import User
+
+security = HTTPBearer()
+
+
+async def get_current_user(
+    auth: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+) -> User:
     """
-    raise NotImplementedError
+    현재 로그인 유저를 반환합니다.
+    """
+    token = auth.credentials  # access_token
+
+    try:
+        # payload를 풀어서 정보를 가져온다.
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str | None = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="토큰에 유저 정보가 없습니다.",
+            )
+    except InvalidTokenError as err:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="인증 토큰이 유효하지 않습니다.",
+        ) from err
+
+    # DB에서 유저 조회한다.
+    user = await User.get_or_none(id=int(user_id))
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="존재하지 않는 유저입니다."
+        )
+
+    return user

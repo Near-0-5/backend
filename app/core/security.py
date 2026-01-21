@@ -1,10 +1,19 @@
-"""보안/JWT 관련 공통 모듈.
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-여기에 넣을 것:
-- JWT encode/decode
-- 비밀번호 해시(소셜만이면 선택)
-- 권한 체크 유틸(관리자/시청권한 등)
+import jwt
 
-추천:
-- domains/auth/service.py에서 토큰 발급 시 여기 함수를 호출하도록 분리.
-"""
+from app.core.config import settings
+
+ALGORITHM = "HS256"
+
+
+def create_access_token(subject: str | Any, expires_delta: timedelta | None = None) -> str:
+    if expires_delta:
+        expire = datetime.now(UTC) + expires_delta
+    else:
+        expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode = {"exp": expire, "sub": str(subject)}
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt

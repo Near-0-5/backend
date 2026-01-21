@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 class UserNoti(models.Model):
     # User와 1:1 관계
     user: fields.OneToOneRelation["User"] = fields.OneToOneField(
-        "models.User", related_name="noti_setting", pk=True
+        "models.User", related_name="noti_setting", on_delete=fields.CASCADE, primary_key=True
     )
     artist_noti = fields.BooleanField(default=True)
     live_noti = fields.BooleanField(default=True)
@@ -22,7 +22,7 @@ class UserNoti(models.Model):
 
 
 class ConcertNoti(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         "models.User", related_name="concert_notis"
     )

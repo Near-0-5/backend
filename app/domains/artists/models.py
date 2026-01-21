@@ -4,6 +4,9 @@ from typing import TYPE_CHECKING
 from tortoise import fields, models
 
 if TYPE_CHECKING:
+    from tortoise.fields import ForeignKeyRelation, ManyToManyRelation
+
+    from app.domains.streams.models import ConcertArtist, ConcertSession
     from app.domains.users.models import User
 
 
@@ -16,7 +19,7 @@ class GroupType(str, Enum):
 
 
 class Artist(models.Model):
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(pk=True)
     stage_name = fields.CharField(max_length=100, description="활동명")
     profile_img_url = fields.CharField(max_length=255, null=True)
     agency = fields.CharField(max_length=100, null=True)
@@ -27,12 +30,16 @@ class Artist(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
+    if TYPE_CHECKING:
+        sessions: ManyToManyRelation["ConcertSession"]
+        session_mappings: ForeignKeyRelation["ConcertArtist"]
+
     class Meta:
         table = "artists"
 
 
 class Follow(models.Model):
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(pk=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         "models.User", related_name="follows"
     )

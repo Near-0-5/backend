@@ -64,6 +64,9 @@ jobs:
             IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml pull
             IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml up -d --wait
             
+            # 도커 마이그레이션 자동화
+            docker compose -f docker-compose.dev.yml exec -T api uv run aerich upgrade
+            
             # 오래된 이미지 정리            
             docker image prune -af --filter "until=72h" || true
             

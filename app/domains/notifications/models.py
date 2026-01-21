@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from tortoise import fields, models
 
 if TYPE_CHECKING:
-    from app.domains.streams.models import Concert
+    from app.domains.streams.models import ConcertSession
     from app.domains.users.models import User
 
 
@@ -22,12 +22,12 @@ class UserNoti(models.Model):
 
 
 class ConcertNoti(models.Model):
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(primary_key=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         "models.User", related_name="concert_notis"
     )
-    concert: fields.ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
-        "models.Concert", related_name="scheduled_notis"
+    session: fields.ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
+        "models.ConcertSession", related_name="scheduled_notis"
     )
     title = fields.CharField(max_length=100)
     message = fields.TextField()
@@ -36,3 +36,4 @@ class ConcertNoti(models.Model):
 
     class Meta:
         table = "concert_notis"
+        unique_together = ("user", "session")

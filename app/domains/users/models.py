@@ -7,7 +7,7 @@ from app.domains.streams.models import CategoryType
 
 if TYPE_CHECKING:
     from app.domains.artists.models import Artist
-    from app.domains.notifications.models import UserNoti
+    from app.domains.notifications.models import ConcertNoti, UserNoti
 
 
 # 소셜 제공자
@@ -24,7 +24,7 @@ class GenderChoices(str, Enum):
 
 
 class User(models.Model):
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(primary_key=True)
     provider = fields.CharEnumField(ProviderChoice, max_length=20)  # kakao, google 등
     provider_id = fields.CharField(max_length=255, unique=True)
     email = fields.CharField(max_length=100, null=True)
@@ -40,8 +40,6 @@ class User(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
-    noti_setting: 'fields.OneToOneRelation["UserNoti"]'
-
     # 아티스트 팔로우 (M2M)  수정예정
     followed_artists: fields.ManyToManyRelation["Artist"] = fields.ManyToManyField(
         "models.Artist",
@@ -51,14 +49,17 @@ class User(models.Model):
         backward_key="user_id",
     )
 
-    fav_categories = fields.ReverseRelation["UserCatFav"]
+    if TYPE_CHECKING:
+        noti_setting: "UserNoti"
+        concert_notis: fields.ReverseRelation["ConcertNoti"]
+        fav_categories: fields.ReverseRelation["UserCatFav"]
 
     class Meta:
         table = "users"
 
 
 class UserCatFav(models.Model):
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(primary_key=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         "models.User", related_name="fav_categories"
     )
@@ -71,8 +72,10 @@ class UserCatFav(models.Model):
 
 
 class UserDeleteLog(models.Model):
-    id = fields.IntField(primary_key=True)
-    user_id = fields.IntField()  # 로그가 남아야함에 FK 미사용
+    id = fields.BigIntField(primary_key=True)
+    user: fields.ForeignKeyRelation["User"] | None = fields.ForeignKeyField(
+        "models.User", on_delete=fields.SET_NULL, null=True
+    )  # 로그가 남아야함에 FK 미사용
     email = fields.CharField(max_length=100, null=True)
     reason = fields.CharField(max_length=200, null=True)
     deleted_at = fields.DatetimeField()

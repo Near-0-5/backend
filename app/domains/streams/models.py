@@ -9,6 +9,7 @@ from app.core.config import settings
 
 if TYPE_CHECKING:
     from app.domains.artists.models import Artist
+    from app.domains.notifications.models import ConcertNoti
 
 
 # 공연 장르 카테고리
@@ -64,12 +65,11 @@ class AccessLevel(str, Enum):
 
 class Concert(models.Model):
     """
-    공연 정보 관리 테이블
-    - 모든 스트리밍세션과 VOD의 부모 테이블
-    - 특정 Category에 속하며 여러 출연진(ConcertArtist)를 가질 수 있음
+    공연 메타 데이터
+    - 특정 Category에 속함
     """
 
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(primary_key=True)
     category = fields.CharEnumField(
         CategoryType, default=CategoryType.KPOP, db_index=True, description="장르(category)"
     )
@@ -78,6 +78,38 @@ class Concert(models.Model):
         max_length=255, null=True, description="공연 썸네일 사진(포스터 등)"
     )
     description = fields.TextField(null=True, description="콘서트 소개 글")
+
+    created_at = fields.DateField(auto_now_add=True, description="생성시각")
+    updated_at = fields.DateField(auto_now=True, description="수정시각")
+
+    if TYPE_CHECKING:
+        sessions: ForeignKeyRelation["ConcertSession"]
+
+    class Meta:
+        table = "concerts"
+
+
+class ConcertSession(models.Model):
+    """
+    콘서트 회차별 정보
+    - 모든 스트리밍세션과 VOD의 부모 테이블
+    - 여러 출연진(ConcertArtist)를 가질 수 있음
+    """
+
+    id = fields.BigIntField(primary_key=True)
+    concert: ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
+        "models.Concert", related_name="sessions"
+    )
+
+    # ConcertArtist를 통해 Artist와 다대다 관계 형성
+    lineup: ManyToManyRelation["Artist"] = fields.ManyToManyField(
+        "models.Artist",
+        through="concert_artists",
+        related_name="sessions",
+        description="이 공연에 참여하는 모든 출연진 목록",
+    )
+
+    session_name = fields.CharField(max_length=50, description="회차 명칭 (예: 1회차, 서울공연)")
     status = fields.CharEnumField(
         StreamStatus,
         max_length=20,
@@ -92,23 +124,19 @@ class Concert(models.Model):
     start_at = fields.DatetimeField(description="공연 예정 시각")
     end_at = fields.DatetimeField(null=True, description="종료 예정 시각")
 
-    created_at = fields.DateField(auto_now_add=True, description="생성시각")
-    updated_at = fields.DateField(auto_now=True, description="수정시각")
-
-    # ConcertArtist를 통해 Artist와 다대다 관계 형성
-    participants: ManyToManyRelation["Artist"] = fields.ManyToManyField(
-        "models.Artist",
-        through="concert_artists",
-        related_name="concerts",
-        description="이 공연에 참여하는 모든 출연진 목록",
-    )
-
-    class Meta:
-        table = "concerts"
-
     @property
     def is_live(self) -> bool:
         return self.status == StreamStatus.LIVE
+
+    if TYPE_CHECKING:
+        stream_channel: "StreamChannel"
+        artist_mappings: ForeignKeyRelation["ConcertArtist"]
+        stream_sessions: ForeignKeyRelation["StreamSession"]
+        vods: ForeignKeyRelation["StreamVod"]
+        scheduled_notis: fields.ReverseRelation["ConcertNoti"]
+
+    class Meta:
+        table = "concert_sessions"
 
 
 class ConcertArtist(models.Model):
@@ -118,15 +146,15 @@ class ConcertArtist(models.Model):
     - 공연별로 출연진 / 메인 출연진 여부 관리
     """
 
-    id = fields.IntField(primary_key=True)
+    id = fields.BigIntField(primary_key=True)
     artist: ForeignKeyRelation["Artist"] = fields.ForeignKeyField(
         "models.Artist",
-        related_name="concert_mappings",
+        related_name="session_mappings",
         on_delete=fields.CASCADE,
         description="출연 아티스트 참조",
     )
-    concert: ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
-        "models.Concert",
+    session: ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
+        "models.ConcertSession",
         related_name="artist_mappings",
         on_delete=fields.CASCADE,
         description="연결된 공연 참조",
@@ -137,7 +165,7 @@ class ConcertArtist(models.Model):
 
     class Meta:
         table = "concert_artists"
-        unique_together = ("artist", "concert")  # 중복 출연 등록 방지
+        unique_together = ("artist", "session")  # 중복 출연 등록 방지
 
 
 class StreamChannel(models.Model):
@@ -147,9 +175,9 @@ class StreamChannel(models.Model):
     - 송출을 위한 스트림 키(암호화), 시청을 위한 재생 URL 관리
     """
 
-    id = fields.IntField(primary_key=True)
-    concert: OneToOneRelation["Concert"] = fields.OneToOneField(
-        "models.Concert",
+    id = fields.BigIntField(primary_key=True)
+    session: OneToOneRelation["ConcertSession"] = fields.OneToOneField(
+        "models.ConcertSession",
         related_name="stream_channel",
         on_delete=fields.CASCADE,
         description="연결된 공연 (1:1)",
@@ -208,9 +236,9 @@ class StreamSession(models.Model):
     - 방송 사고나 재시작으로 인한 스트린 고유 ID(stream_id) 변화 추적
     """
 
-    id = fields.IntField(primary_key=True)
-    concert: ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
-        "models.Concert", related_name="sessions", description="연결된 공연 참조"
+    id = fields.BigIntField(primary_key=True)
+    session: ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
+        "models.ConcertSession", related_name="stream_sessions", description="연결된 공연 회차 참조"
     )
 
     stream_id = fields.CharField(
@@ -231,9 +259,9 @@ class StreamVod(models.Model):
     - 하나의 공연에 대해 여러 개의 영상(멀티캠, 파트별 녹화 기능)이 존재할 수 있음
     """
 
-    id = fields.IntField(primary_key=True)
-    concert: ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
-        "models.Concert", related_name="vods", description="연결된 공연 참조"
+    id = fields.BigIntField(primary_key=True)
+    session: ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
+        "models.ConcertSession", related_name="vods", description="연결된 공연 회차 참조"
     )
 
     s3_bucket = fields.CharField(max_length=100, description="저장 당시 S3 버킷 이름")

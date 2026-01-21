@@ -4,3 +4,11 @@ app/integrations/aws_ivs/
 - client.py: boto3/SDK 래핑 (채널 생성/삭제, 스트림키 등)
 - playback.py: playback token 발급/검증 정책(시청권한/만료/리프레시 등)
 """
+
+from app.integrations.aws_ivs.client import IVSClient
+from app.integrations.aws_ivs.playback import IVSPlaybackProvider
+
+__all__ = [
+    "IVSClient",
+    "IVSPlaybackProvider",
+]

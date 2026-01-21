@@ -46,6 +46,7 @@ class IVSPlaybackProvider:
         """
         [IVS 전용] 비공개 채널 시청 토큰 발급 (ES384 서명)
         - Playback URL 뒤에 '?token=' 파라미터로 붙음
+        - 재생 세션보다 짧은 TTL
         """
         if not self._ivs_private_key:
             raise RuntimeError("IVS_PLAYBACK_PRIVATE_KEY가 설정되지 않았습니다.")
@@ -71,27 +72,27 @@ class IVSPlaybackProvider:
         access_exp = now + (30 * 60)  # 30분
         refresh_exp = now + (7 * 24 * 3600)  # 7일
 
-        access_payload: InternalTokenPayload = {
-            "sub": user_id,
-            "stream_id": stream_id,
-            "type": "access",
-            "iat": now,
-            "exp": access_exp,
-        }
-        refresh_payload: InternalTokenPayload = {
-            "sub": user_id,
-            "type": "refresh",
-            "stream_id": stream_id,
-            "iat": now,
-            "exp": refresh_exp,
-        }
+        def _encode(payload: dict[str, Any]) -> str:
+            return jwt.encode(payload, self._secret, algorithm=self._algo_internal)
 
         return {
-            "access_token": jwt.encode(
-                cast("dict[str, Any]", access_payload), self._secret, algorithm=self._algo_internal
+            "access_token": _encode(
+                {
+                    "sub": user_id,
+                    "stream_id": stream_id,
+                    "type": "access",
+                    "iat": now,
+                    "exp": access_exp,
+                }
             ),
-            "refresh_token": jwt.encode(
-                cast("dict[str, Any]", refresh_payload), self._secret, algorithm=self._algo_internal
+            "refresh_token": _encode(
+                {
+                    "sub": user_id,
+                    "stream_id": stream_id,
+                    "type": "refresh",
+                    "iat": now,
+                    "exp": refresh_exp,
+                }
             ),
         }
 
@@ -119,31 +120,12 @@ class IVSPlaybackProvider:
 
     # ===================== playback_token 재발급 =====================
 
-    def refresh_access_token(self, refresh_token: str) -> str:
-        """
-        [내부 세션] 유효한 Refresh Token을 기반으로 새로운 Access Token 생성
-        """
-        # Refresh Token 검증
-        payload = self.verify_internal_token(refresh_token, expected_type="refresh")
-
-        # 새로운 Access Token 발급
-        now = int(time.time())
-        new_access_payload: InternalTokenPayload = {
-            "sub": payload["sub"],
-            "stream_id": payload["stream_id"],
-            "type": "access",
-            "iat": now,
-            "exp": now + (30 * 60),
-        }
-        return jwt.encode(
-            cast("dict[str, Any]", new_access_payload), self._secret, algorithm=self._algo_internal
-        )
-
     def rotate_tokens(self, refresh_token: str) -> dict[str, str]:
         """
         [내부 세션] Access와 Refresh 토큰을 모두 새로 발급 (Refresh Token Rotation)
         """
         payload = self.verify_internal_token(refresh_token, expected_type="refresh")
+        # 기존 페이로드 정보를 바탕으로 새 토큰(Access + Refresh) 발급
         return self.sign_internal_tokens(user_id=payload["sub"], stream_id=payload["stream_id"])
 
     # ===================================================

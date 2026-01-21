@@ -73,7 +73,9 @@ class UserCatFav(models.Model):
 
 class UserDeleteLog(models.Model):
     id = fields.BigIntField(primary_key=True)
-    user_id = fields.BigIntField()  # 로그가 남아야함에 FK 미사용
+    user: fields.ForeignKeyRelation["User"] | None = fields.ForeignKeyField(
+        "models.User", on_delete=fields.SET_NULL, null=True
+    )  # 로그가 남아야함에 FK 미사용
     email = fields.CharField(max_length=100, null=True)
     reason = fields.CharField(max_length=200, null=True)
     deleted_at = fields.DatetimeField()

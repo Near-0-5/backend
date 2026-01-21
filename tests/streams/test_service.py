@@ -85,6 +85,9 @@ class TestStreamService:
             patch(
                 "app.domains.streams.models.StreamChannel.create", new_callable=AsyncMock
             ) as mock_create_channel,
+            patch(
+                "app.domains.streams.service.Artist.filter", new_callable=AsyncMock
+            ) as mock_artist_filter,
         ):
             # Mock Concert
             mock_concert = MagicMock()
@@ -98,6 +101,13 @@ class TestStreamService:
             mock_session.access_level = AccessLevel.PUBLIC
             mock_session.start_at = session_data.start_at
             mock_create_session.return_value = mock_session
+
+            # Mock Artists
+            mock_artist_1 = MagicMock()
+            mock_artist_1.id = 1
+            mock_artist_2 = MagicMock()
+            mock_artist_2.id = 2
+            mock_artist_filter.return_value = [mock_artist_1, mock_artist_2]
 
             # Mock Channel
             mock_channel = MagicMock()

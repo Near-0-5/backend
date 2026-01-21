@@ -59,6 +59,7 @@ class ConcertResponse(BaseModel):
     id: int
     title: str
     category: CategoryType
+    description: str | None = None
     created_at: datetime
 
 

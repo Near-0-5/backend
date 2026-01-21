@@ -1,5 +1,6 @@
 from typing import Any
 
+from app.domains.artists.models import Artist
 from app.domains.streams.models import (
     AccessLevel,
     Concert,
@@ -43,8 +44,15 @@ class StreamAdminService:
 
         # 출연 아티스트 매핑
         if data.artist_ids:
-            for artist_id in data.artist_ids:
-                await ConcertArtist.create(session=session, artist_id=artist_id)
+            artists = await Artist.filter(id__in=data.artist_ids)
+            found_ids = {a.id for a in artists}
+
+            missing = set(data.artist_ids) - found_ids
+            if missing:
+                raise ValueError(f"존재하지 않는 아티스트ID: {missing}")
+
+            for artist in artists:
+                await ConcertArtist.create(session=session, artist=artist)
 
         # IVS 채널 생성 호출
         config = data.channel_config

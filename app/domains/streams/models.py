@@ -79,8 +79,8 @@ class Concert(models.Model):
     )
     description = fields.TextField(null=True, description="콘서트 소개 글")
 
-    created_at = fields.DateField(auto_now_add=True, description="생성시각")
-    updated_at = fields.DateField(auto_now=True, description="수정시각")
+    created_at = fields.DatetimeField(auto_now_add=True, description="생성시각")
+    updated_at = fields.DatetimeField(auto_now=True, description="수정시각")
 
     if TYPE_CHECKING:
         sessions: ForeignKeyRelation["ConcertSession"]

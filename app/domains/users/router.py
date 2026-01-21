@@ -1,18 +1,33 @@
-"""users 도메인 HTTP 라우터.
+from typing import Annotated, Any
 
-여기에 넣을 것:
-- APIRouter(prefix='...', tags=[...])
-- endpoints 정의(GET/POST/PATCH/DELETE)
-- Depends로 인증/권한 체크
-- service 함수를 호출해서 결과 반환
+from fastapi import APIRouter, Depends, status
 
-예:
-- GET /users
-- POST /users
-"""
-
-from fastapi import APIRouter
+from app.api.deps import get_current_user
+from app.domains.users.models import User
+from app.domains.users.schemas import UserMeResponse
+from app.domains.users.service import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-# TODO: endpoints 추가
+
+@router.get(
+    "/me",
+    response_model=UserMeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="내 프로필 조회",
+    description="""
+    현재 로그인한 사용자의 상세 정보를 조회합니다.
+    - **기본 정보**: 이메일, 닉네임, 실명, 프로필 이미지 등
+    - **활동 정보**: 팔로우 중인 아티스트 리스트
+    - **설정 정보**: 선호 카테고리 및 개인화된 알림 설정 상태
+    """,
+    responses={
+        401: {"description": "인증되지 않은 사용자 (토큰 만료 또는 누락)"},
+        404: {"description": "사용자 정보를 찾을 수 없음"},
+    },
+)
+async def get_my_profile(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    """내 프로필 정보를 반환합니다."""
+    return await user_service.get_user_profile(current_user.id)

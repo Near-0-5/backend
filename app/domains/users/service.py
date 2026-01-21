@@ -1,10 +1,50 @@
-"""users 도메인 서비스(비즈니스 로직).
+from typing import TYPE_CHECKING, Any, cast
 
-여기에 넣을 것:
-- router에서 호출할 함수들
-  - create_*, update_*, delete_*, list_*, get_*
-- DB 접근(Tortoise 쿼리) + 검증/권한체크 + 외부연동 호출(integrations)
+from app.domains.users.models import User, UserCatFav
 
-규칙:
-- router.py에는 로직을 최소화하고, 실제 처리는 service로 내려보내기.
-"""
+if TYPE_CHECKING:
+    # 런타임에는 필요 없지만 타입 힌트용으로만 쓰이는 임포트
+    from collections.abc import Iterable
+
+
+class UserService:
+    async def get_user_profile(self, user_id: int) -> dict[str, Any]:
+        """
+        사용자의 상세 프로필 정보를 조회합니다.
+        (팔로우한 아티스트, 알림 설정, 선호 카테고리 포함)
+        """
+
+        # 이미 인증이 완료된 current_user 객체를 바로 사용
+        user = await User.get(id=user_id).prefetch_related(
+            "followed_artists", "noti_setting", "fav_categories"
+        )
+
+        notis = user.noti_setting
+        fav_categories = cast("Iterable[UserCatFav]", user.fav_categories)
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "nickname": user.nickname,
+            "name": user.real_name,
+            "profile_image": user.profile_img_url,
+            "joined_at": user.created_at,
+            "bio": user.bio,
+            "favorite_artists": [
+                {
+                    "id": artist.id,
+                    "name": artist.stage_name,
+                    "profile_image": artist.profile_img_url,
+                }
+                for artist in user.followed_artists
+            ],
+            "preferred_categories": [cat.category.value for cat in fav_categories],
+            "notification_settings": {
+                "new_content_from_favorite_artists": notis.artist_noti if notis else True,
+                "live_start_notification": notis.live_noti if notis else True,
+                "marketing_consent": notis.marketing_noti if notis else False,
+            },
+        }
+
+
+user_service = UserService()

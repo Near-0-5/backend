@@ -21,6 +21,8 @@ class ConcertCreateRequest(BaseModel):
     description: str | None = None
     thumbnail_url: str | None = None
 
+    model_config = {"extra": "forbid"}
+
 
 class SessionCreateRequest(BaseModel):
     """콘서트 세션 생성 요청 스키마"""

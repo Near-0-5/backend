@@ -69,9 +69,9 @@ class Concert(models.Model):
     - 특정 Category에 속함
     """
 
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     category = fields.CharEnumField(
-        CategoryType, default=CategoryType.KPOP, index=True, description="장르(category)"
+        CategoryType, default=CategoryType.KPOP, db_index=True, description="장르(category)"
     )
     title = fields.CharField(max_length=100, description="공연 제목")
     thumbnail_url = fields.CharField(
@@ -96,7 +96,7 @@ class ConcertSession(models.Model):
     - 여러 출연진(ConcertArtist)를 가질 수 있음
     """
 
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     concert: ForeignKeyRelation["Concert"] = fields.ForeignKeyField(
         "models.Concert", related_name="sessions"
     )
@@ -146,7 +146,7 @@ class ConcertArtist(models.Model):
     - 공연별로 출연진 / 메인 출연진 여부 관리
     """
 
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     artist: ForeignKeyRelation["Artist"] = fields.ForeignKeyField(
         "models.Artist",
         related_name="session_mappings",
@@ -175,7 +175,7 @@ class StreamChannel(models.Model):
     - 송출을 위한 스트림 키(암호화), 시청을 위한 재생 URL 관리
     """
 
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     session: OneToOneRelation["ConcertSession"] = fields.OneToOneField(
         "models.ConcertSession",
         related_name="stream_channel",
@@ -236,7 +236,7 @@ class StreamSession(models.Model):
     - 방송 사고나 재시작으로 인한 스트린 고유 ID(stream_id) 변화 추적
     """
 
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     session: ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
         "models.ConcertSession", related_name="stream_sessions", description="연결된 공연 회차 참조"
     )
@@ -259,7 +259,7 @@ class StreamVod(models.Model):
     - 하나의 공연에 대해 여러 개의 영상(멀티캠, 파트별 녹화 기능)이 존재할 수 있음
     """
 
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     session: ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
         "models.ConcertSession", related_name="vods", description="연결된 공연 회차 참조"
     )

@@ -59,7 +59,7 @@ class User(models.Model):
 
 
 class UserCatFav(models.Model):
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         "models.User", related_name="fav_categories"
     )
@@ -72,7 +72,7 @@ class UserCatFav(models.Model):
 
 
 class UserDeleteLog(models.Model):
-    id = fields.BigIntField(pk=True)
+    id = fields.BigIntField(primary_key=True)
     user_id = fields.BigIntField()  # 로그가 남아야함에 FK 미사용
     email = fields.CharField(max_length=100, null=True)
     reason = fields.CharField(max_length=200, null=True)

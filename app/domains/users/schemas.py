@@ -16,6 +16,9 @@ class NotiSettings(BaseModel):
 
 
 class UserMeResponse(BaseModel):
+    # class Config: ... 대체
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str | None
     nickname: str
@@ -28,7 +31,3 @@ class UserMeResponse(BaseModel):
     favorite_artists: list[ArtistSimple]
     preferred_categories: list[str]
     notification_settings: NotiSettings
-
-    class Config:
-        from_attributes = True  # Tortoise 객체를 자동으로 Pydantic으로 변환
-        model_config = ConfigDict(from_attributes=True)

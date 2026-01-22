@@ -8,7 +8,6 @@ from app.domains.artists.models import Artist, GroupType
 
 
 async def seed_artists() -> None:
-
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas()
 

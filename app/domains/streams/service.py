@@ -45,59 +45,68 @@ class StreamAdminService:
         session_dict = data.model_dump(exclude={"channel_config", "artist_ids"})
         session = await ConcertSession.create(concert=concert, **session_dict)
 
-        # 출연 아티스트 매핑
-        if data.artist_ids:
-            artists = await Artist.filter(id__in=data.artist_ids)
-            if len(artists) != len(data.artist_ids):
-                found_ids = {a.id for a in artists}
-                missing = set(data.artist_ids) - found_ids
-                raise HTTPException(status_code=400, detail=f"존재하지 않는 아티스트: {missing}")
-
-            for artist in artists:
-                await ConcertArtist.create(session=session, artist=artist)
-
-        # IVS 채널 생성 호출 (예외 처리 추가)
-        config = data.channel_config
         try:
+            # 출연 아티스트 매핑
+            if data.artist_ids:
+                artists = await Artist.filter(id__in=data.artist_ids)
+                if len(artists) != len(data.artist_ids):
+                    found_ids = {a.id for a in artists}
+                    missing = set(data.artist_ids) - found_ids
+                    raise HTTPException(
+                        status_code=400, detail=f"존재하지 않는 아티스트: {missing}"
+                    )
+
+                for artist in artists:
+                    await ConcertArtist.create(session=session, artist=artist)
+
+            # IVS 채널 생성 호출 (예외 처리 추가)
+            config = data.channel_config
+
             ivs_res = self.ivs_client.create_channel(
                 name=f"session-{session.id}",
                 latency_mode=config.latency_mode.value,
                 channel_type=config.channel_type.value,
                 authorized=(session.access_level != AccessLevel.PUBLIC),
             )
+
+            channel_arn = ivs_res["channel"]["arn"]
+            stream_key_raw = ivs_res["streamKey"]["value"]
+
+            # 채널 정보 DB 저장
+            try:
+                channel = StreamChannel(
+                    session=session,
+                    type=config.channel_type,
+                    latency_mode=config.latency_mode,
+                    channel_arn=channel_arn,
+                    ingest_endpoint=ivs_res["channel"]["ingestEndpoint"],
+                    playback_url=ivs_res["channel"]["playbackUrl"],
+                    is_private=(session.access_level != AccessLevel.PUBLIC),
+                )
+                channel.set_stream_key(stream_key_raw)
+                await channel.save()
+
+            except Exception as db_error:
+                # DB 저장 실패 시 AWS에 생성된 채널 삭제 (Cleanup)
+                self.ivs_client.delete_channel(channel_arn)
+                await session.delete()
+                raise HTTPException(
+                    status_code=500, detail=f"DB 저장 실패로 인프라를 롤백했습니다: {str(db_error)}"
+                ) from db_error
+
         except Exception as e:
+            # IVS 세팅 실패했으면 콘서트 세션 삭제
+            if "session" in locals() and session.id:
+                await session.delete()
+            # AWS 권한 에러
             if (
                 isinstance(e, ClientError)
                 and e.response["Error"]["Code"] == "AccessDeniedException"
             ):
-                raise HTTPException(
-                    status_code=500, detail="AWS 권한 부족 (IVS Access Denied)"
-                ) from e
-            raise HTTPException(status_code=500, detail=f"IVS 채널 생성 실패: {str(e)}") from e
+                raise HTTPException(500, "AWS 권한 부족") from e
 
-        # DB 저장 및 롤백 (채널만 생김 방지)
-        channel_arn = ivs_res["channel"]["arn"]
-        stream_key_raw = ivs_res["streamKey"]["value"]
-
-        try:
-            channel = StreamChannel(
-                session=session,
-                type=config.channel_type,
-                latency_mode=config.latency_mode,
-                channel_arn=channel_arn,
-                ingest_endpoint=ivs_res["channel"]["ingestEndpoint"],
-                playback_url=ivs_res["channel"]["playbackUrl"],
-                is_private=(session.access_level != AccessLevel.PUBLIC),
-            )
-            channel.set_stream_key(stream_key_raw)
-            await channel.save()
-
-        except Exception as db_error:
-            # DB 저장 실패 시 AWS에 생성된 채널 삭제 (Cleanup)
-            self.ivs_client.delete_channel(channel_arn)
-            raise HTTPException(
-                status_code=500, detail=f"DB 저장 실패로 인프라를 롤백했습니다: {str(db_error)}"
-            ) from db_error
+            # 그 외 모든 에러
+            raise HTTPException(500, f"IVS 채널 생성 실패: {str(e)}") from e
 
         from app.domains.streams.schemas import IVSChannelSummary
 

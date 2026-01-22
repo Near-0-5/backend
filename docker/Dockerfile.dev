@@ -1,0 +1,26 @@
+FROM python:3.13-slim
+
+# 빌드/런타임에 필요한 시스템 패키지
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# uv 설치
+RUN pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir uv
+
+# 의존성 먼저 복사 (캐시 최적화 핵심)
+COPY pyproject.toml uv.lock ./
+
+# dev 의존성 포함, .venv 생성
+RUN uv sync --locked
+
+# 소스 복사
+COPY . .
+
+EXPOSE 8000
+
+# FastAPI 실행
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

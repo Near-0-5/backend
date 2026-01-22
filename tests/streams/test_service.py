@@ -191,9 +191,12 @@ class TestStreamService:
         mock_session.stream_channel = mock_channel
 
         # ConcertSession.get() + prefetch_related Mock
-        with patch("app.domains.streams.models.ConcertSession.get") as mock_get, patch(
-            "app.domains.streams.permissions.StreamPermission.verify_playback_access",
-            new_callable=AsyncMock,
+        with (
+            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
+            patch(
+                "app.domains.streams.permissions.StreamPermission.verify_playback_access",
+                new_callable=AsyncMock,
+            ),
         ):
             mock_get.return_value.prefetch_related = AsyncMock(return_value=mock_session)
 

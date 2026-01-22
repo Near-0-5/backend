@@ -88,13 +88,13 @@ class TestStreamRouter:
                     access_level=AccessLevel.PUBLIC,
                     start_at=datetime.now(),
                     channel=IVSChannelSummary(
-                        channel_arn="arn:test",
-                        ingest_endpoint="rtmps://test",
-                        playback_url="https://test.m3u8",
-                        latency_mode=LatencyMode.LOW,
-                        channel_type=ChannelType.STANDARD,
+                        arn="arn:test",
+                        ingestEndpoint="rtmps://test",
+                        playbackUrl="https://test.m3u8",
+                        latencyMode=LatencyMode.LOW,
+                        type=ChannelType.STANDARD,
                     ),
-                    stream_key="sk_test",
+                    value="sk_test",
                 )
 
                 # create session
@@ -113,7 +113,7 @@ class TestStreamRouter:
                 )
 
                 assert res.status_code == 201
-                assert res.json()["stream_key"] == "sk_test"
+                assert res.json()["value"] == "sk_test"
 
         finally:
             app.dependency_overrides.clear()

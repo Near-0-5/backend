@@ -46,7 +46,7 @@ class TestStreamService:
             start_at=now,
             channel_config=ChannelConfig(
                 latency_mode=LatencyMode.LOW,
-                channel_type=ChannelType.STANDARD,
+                type=ChannelType.STANDARD,
             ),
             artist_ids=[1],
         )
@@ -126,8 +126,6 @@ class TestStreamService:
 
             assert "AWS 권한 부족" in exc.value.detail
 
-
-
     @pytest.mark.asyncio
     async def test_get_stream_ingest_info_success_live(self, mock_ivs_client):
         """방송 중일 때 송출 정보 조회 및 DB 상태 동기화 검증"""
@@ -175,11 +173,10 @@ class TestStreamService:
             response = await service.get_stream_ingest_info(session_id=4, user=mock_user)
 
             # 검증
-            assert response.isLive is True
-            assert response.liveMetrics.viewerCount == 1500
+            assert response.is_live is True
+            assert response.live_metrics.viewer_count == 1500
             assert mock_session.status == "LIVE"
             mock_session.save.assert_called_once()
-
 
     @pytest.mark.asyncio
     async def test_get_stream_ingest_info_no_channel(self, mock_ivs_client):
@@ -202,7 +199,6 @@ class TestStreamService:
                 await service.get_stream_ingest_info(1, mock_user)
 
             assert exc.value.status_code == 404
-
 
     @pytest.mark.asyncio
     async def test_get_stream_ingest_info_permission_denied(self, mock_ivs_client):

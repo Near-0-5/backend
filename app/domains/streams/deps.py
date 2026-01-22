@@ -1,4 +1,5 @@
-from app.domains.streams.service import StreamAdminService, StreamUserService
+from app.domains.streams.admin.service import StreamAdminService
+from app.domains.streams.client.service import StreamUserService
 from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider
 
 

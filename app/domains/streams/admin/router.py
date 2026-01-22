@@ -2,14 +2,14 @@ from fastapi import APIRouter, Body, Depends, Path, status
 
 from app.api import deps
 from app.domains.streams import deps as streams_deps
-from app.domains.streams.models import Concert
-from app.domains.streams.schemas import (
+from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
     ConcertResponse,
     SessionCreateRequest,
     SessionResponse,
 )
-from app.domains.streams.service import StreamAdminService
+from app.domains.streams.admin.service import StreamAdminService
+from app.domains.streams.models import Concert
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/streams", tags=["[Admin] Streaming"])

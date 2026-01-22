@@ -1,11 +1,12 @@
 from datetime import date
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.domains.artists.models import Artist
 from app.domains.notifications.models import UserNoti
 from app.domains.streams.models import CategoryType
-from app.domains.users.models import GenderChoices, ProviderChoice, User, UserCatFav
+from app.domains.users.models import GenderChoices, ProviderChoice, User, UserCatFav, UserDeleteLog
 from app.domains.users.service import user_service
 
 
@@ -80,3 +81,27 @@ async def test_get_user_profile_no_relation_data(initialize_tests):
     assert notis["new_content_from_favorite_artists"] is True
     assert notis["live_start_notification"] is True
     assert notis["marketing_consent"] is False
+
+
+@pytest.mark.asyncio
+async def test_withdraw_kakao_user_full_flow(initialize_tests):
+    # 1. 테스트 유저 생성
+    user = await User.create(
+        provider_id="999",
+        provider=ProviderChoice.KAKAO,
+        nickname="del_me",
+        email="test@example.com",  # 이메일 필수
+    )
+
+    # 2. 외부 API(카카오 Unlink) 호출 모킹
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = MagicMock(status_code=200)
+
+        # 3. 서비스 함수 실행
+        await user_service.withdraw_kakao_user(user, reason="테스트 탈퇴")
+
+    # 4. 검증: 유저가 DB에서 삭제되었는지 확인
+    assert await User.get_or_none(id=user.id) is None
+    # 5. 검증: 탈퇴 로그가 생성되었는지 확인
+    log_exists = await UserDeleteLog.filter(email="test@example.com").exists()
+    assert log_exists is True

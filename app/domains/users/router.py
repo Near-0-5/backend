@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
 from app.api.deps import get_current_user
 from app.domains.users.models import User
@@ -31,3 +31,18 @@ async def get_my_profile(
 ) -> dict[str, Any]:
     """내 프로필 정보를 반환합니다."""
     return await user_service.get_user_profile(current_user.id)
+
+
+@router.delete("/me", summary="회원 탈퇴", status_code=status.HTTP_204_NO_CONTENT)
+async def withdraw(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    reason: str = "사용자 요청에 의한 탈퇴",
+) -> Response:
+    """회원 데이터 삭제 및 쿠키 제거"""
+    # DB 삭제
+    await user_service.withdraw_kakao_user(current_user, reason)
+    # 쿠키제거
+    response.delete_cookie(key="refresh_token", path="/")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

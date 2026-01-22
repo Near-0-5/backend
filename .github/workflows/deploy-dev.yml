@@ -64,11 +64,11 @@ jobs:
             docker image prune -af --filter "until=72h" || true
             
             # IMAGE_TAG를 docker-compose에 전달
-            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml pull
-            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.dev.yml up -d --wait
+            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.prod.yml pull
+            IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.prod.yml up -d --wait
             
             # 도커 마이그레이션 자동화
-            docker compose -f docker-compose.dev.yml exec -T api uv run aerich upgrade
+            docker compose -f docker-compose.prod.yml exec -T api uv run aerich upgrade
             
             # 리소스 정리
             docker system prune -f --volumes --filter "until=24h" || true

@@ -3,7 +3,7 @@ services:
     container_name: api
     build:
       context: ..
-      dockerfile: docker/DockerFile
+      dockerfile: docker/Dockerfile.dev
     environment:
       - MODE=dev
     env_file:

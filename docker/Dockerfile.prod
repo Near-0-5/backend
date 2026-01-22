@@ -15,11 +15,11 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY pyproject.toml uv.lock ./
 
 # prod 의존성만, 전역 설치, .venv 없음
-RUN uv sync --locked --no-dev --no-install-project --system
+RUN uv sync --locked --no-dev --no-install-project
 
 # 소스 복사
 COPY . .
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

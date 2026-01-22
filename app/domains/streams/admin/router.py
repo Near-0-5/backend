@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Body, Depends, Path, status
+from fastapi import APIRouter, Body, Depends, Path, Request, status
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from app.api import deps
 from app.domains.streams import deps as streams_deps
@@ -7,12 +9,14 @@ from app.domains.streams.admin.schemas import (
     ConcertResponse,
     SessionCreateRequest,
     SessionResponse,
+    StreamIngestResponse,
 )
 from app.domains.streams.admin.service import StreamAdminService
 from app.domains.streams.models import Concert
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/streams", tags=["[Admin] Streaming"])
+templates = Jinja2Templates(directory="templates")
 
 
 @router.post(
@@ -50,3 +54,35 @@ async def create_concert_stream(
     3. 발급된 스트림 키는 내부 보안 정책에 따라 암호화하여 저장합니다.
     """
     return await service.create_session_with_infrastructure(concert_id, data, current_user)
+
+
+@router.get(
+    "/sessions/{session_id}/ingest",
+    response_model=StreamIngestResponse,
+    summary="송출 정보 조회 (OBS용)",
+    description="AWS IVS 채널의 Ingest Endpoint와 복호화된 Stream Key 조회  \
+                \n\n 현재 실제 송출 여부와 시청자 수 등 실시간 메트릭을 함께 반환",
+)
+async def get_session_ingest_data(
+    session_id: int = Path(..., description="콘서트 세션 ID"),
+    current_user: User = Depends(deps.get_current_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> StreamIngestResponse:
+    return await service.get_stream_ingest_info(session_id, current_user)
+
+
+@router.get(
+    "/sessions/{session_id}/monitor",
+    response_class=HTMLResponse,
+    summary="실시간 송출 모니터링 페이지",
+    description="관리자가 방송 송출 상태를 확인하고 \
+    실시간으로 영상을 프리뷰 할 수 있는 HTML 대시보드",
+)
+async def stream_monitor_page(
+    request: Request,
+    session_id: int = Path(..., description="모니터링할 콘서트 세션 ID"),
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "stream_monitor.html",
+        {"request": request, "session_id": session_id},
+    )

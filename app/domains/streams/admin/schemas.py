@@ -12,6 +12,17 @@ class ChannelConfig(BaseModel):
     channel_type: ChannelType = Field(default=ChannelType.STANDARD)
 
 
+class StreamLiveMetrics(BaseModel):
+    health: str = Field(..., description="스트림 건강 상태 (HEALTHY...)")
+    viewerCount: int = Field(..., description="현재 동시 시청자 수")
+    startTime: datetime | None = Field(None, description="방송 시작 시각")
+
+
+class StreamIngestInfo(BaseModel):
+    ingestEndpoint: str = Field(..., description="RTMP 서버 주소")
+    streamKey: str = Field(..., description="복호화된 스트림 키")
+
+
 # ==================== 요청 스키마 ====================
 class ConcertCreateRequest(BaseModel):
     """콘서트 생성 요청 스키마"""
@@ -78,3 +89,12 @@ class SessionResponse(BaseModel):
     # 인프라 정보는 별도 객체로 분리
     channel: IVSChannelSummary | None = None
     stream_key: str | None = Field(None, description="생성 시에만 일회성으로 노출되는 스트림 키")
+
+
+class StreamIngestResponse(BaseModel):
+    sessionId: int
+    isLive: bool
+    concertTitle: str
+    ingestInfo: StreamIngestInfo
+    playbackUrl: str
+    liveMetrics: StreamLiveMetrics | None = None

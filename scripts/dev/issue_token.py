@@ -34,7 +34,7 @@ async def main() -> None:
 
     print("[access token]")
     print(token)
-    print(f"\n\nuser_id:{user_id} - 토큰 발급 완료")
+    print(f"\n\n[ ID: {user_id} ] - 토큰 발급 완료")
 
 
 if __name__ == "__main__":

@@ -1,32 +1,68 @@
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 from app.domains.streams.models import AccessLevel, CategoryType, ChannelType, LatencyMode
+
+# 모든 AWS 통신(In/Out)은 CamelCase, 서버 내부 로직은 snake_case
+COMMON_CONFIG = ConfigDict(
+    alias_generator=to_camel,
+    populate_by_name=True,
+    from_attributes=True,
+)
 
 
 class ChannelConfig(BaseModel):
     """IVS 채널 생성 상세 설정"""
 
+    model_config = COMMON_CONFIG
     latency_mode: LatencyMode = Field(default=LatencyMode.LOW)
-    channel_type: ChannelType = Field(default=ChannelType.STANDARD)
+    channel_type: ChannelType = Field(default=ChannelType.STANDARD, alias="type")
+
+
+class StreamLiveMetrics(BaseModel):
+    model_config = COMMON_CONFIG
+    health: str = Field(..., description="스트림 건강 상태 (HEALTHY, STARVING, UNKNOWN)")
+    viewer_count: int = Field(..., description="현재 동시 시청자 수")
+    start_time: datetime | None = Field(None, description="방송 시작 시각")
+    state: str = Field(..., description="LIVE 상태")
+
+
+class StreamIngestInfo(BaseModel):
+    model_config = COMMON_CONFIG
+    ingest_endpoint: str = Field(..., description="RTMP 서버 주소")
+    stream_key: str = Field(..., alias="value", description="복호화된 스트림 키")  # AWS는 value
+
+
+class IVSChannelSummary(BaseModel):
+    """AWS IVS 채널 정보 요약"""
+
+    model_config = COMMON_CONFIG
+    arn: str
+    ingest_endpoint: str
+    playback_url: str
+    latency_mode: LatencyMode
+    type: ChannelType
 
 
 # ==================== 요청 스키마 ====================
 class ConcertCreateRequest(BaseModel):
     """콘서트 생성 요청 스키마"""
 
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True, from_attributes=True, extra="forbid"
+    )  # 프론트에서 오는 camel -> snake
     category: CategoryType
     title: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
     thumbnail_url: str | None = None
 
-    model_config = {"extra": "forbid"}
-
 
 class SessionCreateRequest(BaseModel):
     """콘서트 세션 생성 요청 스키마"""
 
+    model_config = COMMON_CONFIG
     session_name: str = Field(..., min_length=1, max_length=100)
     start_at: datetime
     end_at: datetime | None = None
@@ -43,21 +79,12 @@ class SessionCreateRequest(BaseModel):
 # ==================== 응답 스키마 ====================
 
 
-class IVSChannelSummary(BaseModel):
-    """AWS IVS 채널 정보 요약"""
-
-    channel_arn: str
-    ingest_endpoint: str
-    playback_url: str
-    latency_mode: LatencyMode
-    channel_type: ChannelType
-
-
 class ConcertResponse(BaseModel):
-    """콘서트 생성 최종 응답"""
+    """콘서트 생성 응답"""
 
-    model_config = ConfigDict(from_attributes=True)
-
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True, from_attributes=True, extra="forbid"
+    )
     id: int
     title: str
     category: CategoryType
@@ -66,10 +93,9 @@ class ConcertResponse(BaseModel):
 
 
 class SessionResponse(BaseModel):
-    """세션 생성 최종 응답"""
+    """세션 생성 응답"""
 
-    model_config = ConfigDict(from_attributes=True)
-
+    model_config = COMMON_CONFIG
     id: int = Field(..., description="내부 세션 ID")
     session_name: str
     access_level: AccessLevel
@@ -77,4 +103,18 @@ class SessionResponse(BaseModel):
 
     # 인프라 정보는 별도 객체로 분리
     channel: IVSChannelSummary | None = None
-    stream_key: str | None = Field(None, description="생성 시에만 일회성으로 노출되는 스트림 키")
+    stream_key: str | None = Field(
+        None, description="생성 시에만 일회성으로 노출되는 스트림 키", alias="value"
+    )
+
+
+class StreamIngestResponse(BaseModel):
+    """송출 OBS 응답"""
+
+    model_config = COMMON_CONFIG
+    session_id: int
+    is_live: bool
+    concert_title: str
+    ingest_info: StreamIngestInfo
+    playback_url: str
+    live_metrics: StreamLiveMetrics | None = None

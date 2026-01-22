@@ -46,7 +46,7 @@ class TestStreamService:
             start_at=now,
             channel_config=ChannelConfig(
                 latency_mode=LatencyMode.LOW,
-                channel_type=ChannelType.STANDARD,
+                type=ChannelType.STANDARD,
             ),
             artist_ids=[1],
         )
@@ -125,3 +125,92 @@ class TestStreamService:
                 )
 
             assert "AWS 권한 부족" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_get_stream_ingest_info_success_live(self, mock_ivs_client):
+        """방송 중일 때 송출 정보 조회 및 DB 상태 동기화 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        # Mock 데이터 설정 (AWS IVS)
+        mock_ivs_client.get_stream_health.return_value = {
+            "stream": {
+                "health": "HEALTHY",
+                "viewerCount": 1500,
+                "startTime": datetime.now(),
+                "state": "LIVE",
+            }
+        }
+
+        # DB 모델 Mocking
+        mock_channel = MagicMock(spec=StreamChannel)
+        mock_channel.channel_arn = "arn:aws:ivs:test"
+        mock_channel.ingest_endpoint = "rtmps://test-ingest.com"
+        mock_channel.playback_url = "https://test-play.com"
+        mock_channel.get_stream_key.return_value = "decrypted_sk_123"
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.id = 4
+        mock_session.status = "READY"
+        mock_session.stream_channel = mock_channel
+        mock_session.concert.title = "Test Concert"
+        mock_session.save = AsyncMock()
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
+        ):
+            # get()은 즉시 mock_query를 반환 (비동기 아님)
+            mock_query = MagicMock()
+
+            # prefetch_related를 AsyncMock으로 설정하여 await가 가능하게 함
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+
+            # ConcertSession.get()이 호출되면 mock_query를 반환
+            mock_get.return_value = mock_query
+
+            # 실행
+            response = await service.get_stream_ingest_info(session_id=4, user=mock_user)
+
+            # 검증
+            assert response.is_live is True
+            assert response.live_metrics.viewer_count == 1500
+            assert mock_session.status == "LIVE"
+            mock_session.save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_stream_ingest_info_no_channel(self, mock_ivs_client):
+        """세션에 IVS 채널이 연결되어 있지 않은 경우 404 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.stream_channel = None
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
+        ):
+            mock_query = MagicMock()
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+            mock_get.return_value = mock_query
+
+            with pytest.raises(HTTPException) as exc:
+                await service.get_stream_ingest_info(1, mock_user)
+
+            assert exc.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_get_stream_ingest_info_permission_denied(self, mock_ivs_client):
+        """관리자 권한이 없을 때 예외 발생 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=False)  # 일반 유저
+
+        with patch(
+            "app.domains.streams.admin.service.StreamPermission.must_be_admin",
+            side_effect=HTTPException(status_code=403, detail="권한 없음"),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await service.get_stream_ingest_info(1, mock_user)
+
+            assert exc.value.status_code == 403

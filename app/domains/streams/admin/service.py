@@ -6,6 +6,9 @@ from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
     SessionCreateRequest,
     SessionResponse,
+    StreamIngestInfo,
+    StreamIngestResponse,
+    StreamLiveMetrics,
 )
 from app.domains.streams.models import (
     AccessLevel,
@@ -13,6 +16,7 @@ from app.domains.streams.models import (
     ConcertArtist,
     ConcertSession,
     StreamChannel,
+    StreamStatus,
 )
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
@@ -71,6 +75,7 @@ class StreamAdminService:
                 authorized=(session.access_level != AccessLevel.PUBLIC),
             )
 
+            # DB 저장 시 필드명 snake_case 맞춤
             channel_arn = ivs_res["channel"]["arn"]
             stream_key_raw = ivs_res["streamKey"]["value"]
 
@@ -118,11 +123,60 @@ class StreamAdminService:
             access_level=session.access_level,
             start_at=session.start_at,
             channel=IVSChannelSummary(
-                channel_arn=channel.channel_arn,
+                arn=channel.channel_arn,
                 ingest_endpoint=channel.ingest_endpoint,
                 playback_url=channel.playback_url,
                 latency_mode=channel.latency_mode,
-                channel_type=channel.type,
+                type=channel.type,
             ),
-            stream_key=stream_key_raw,  # 생성 시점에만 평문 노출
+            value=stream_key_raw,  # 생성 시점에만 평문 노출
+        )
+
+    async def get_stream_ingest_info(self, session_id: int, user: User) -> StreamIngestResponse:
+        """
+        [Admin] 송출 상세 정보 조회, 실시간 상태 확인
+        """
+        # 관리자 권한 체크
+        StreamPermission.must_be_admin(user)
+
+        # DB 조회
+        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        channel = session.stream_channel
+
+        if not channel:
+            raise HTTPException(404, "해당 세션에 연결된 IVS 채널이 업습니다.")
+
+        # AWS IVS 헬스체크(방송 중 아니면 None)
+        stream_res = self.ivs_client.get_stream_health(channel.channel_arn)
+        is_live = stream_res is not None and "stream" in stream_res
+
+        # DB 상태 동기화(AWS는 LIVE인데 DB가 READY면 업데이트)
+        new_status = StreamStatus.LIVE if is_live else StreamStatus.READY
+
+        # 이미 종료된 방송(ENDED)은 함부로 바꾸지 않도록 방어
+        if session.status != StreamStatus.ENDED and session.status != new_status:
+            session.status = new_status
+            await session.save(update_fields=["status"])
+
+        # 방송 중 실시간 메트릭 구성
+        live_metrics = None
+        if is_live and stream_res:
+            s = stream_res["stream"]
+            live_metrics = StreamLiveMetrics(
+                health=s.get("health"),  # HEALTHY, STARVING, UNKNOWN
+                viewer_count=s.get("viewerCount", 0),
+                start_time=s.get("startTime"),
+                state=s.get("state"),
+            )
+
+        return StreamIngestResponse(
+            session_id=session.id,
+            is_live=is_live,
+            concert_title=session.concert.title,
+            ingest_info=StreamIngestInfo(
+                ingest_endpoint=channel.ingest_endpoint,  # OBS 서버 (rtmps://)
+                value=channel.get_stream_key(),  # OBS 스트림 키 (복호화)
+            ),
+            playback_url=channel.playback_url,
+            live_metrics=live_metrics,
         )

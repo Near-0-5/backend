@@ -1,9 +1,10 @@
 services:
   api:
     container_name: api-prod
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/near05-api:${IMAGE_TAG}
+    image: 104266513708.dkr.ecr.ap-northeast-2.amazonaws.com/near05-api:${IMAGE_TAG}
     environment:
       - MODE=prod
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
     env_file:
       - ../envs/.prod.env
     ports:
@@ -18,12 +19,12 @@ services:
     image: postgres:14
     container_name: postgres-prod
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pw1234
+      POSTGRES_DB: near05_db
       TZ: Asia/Seoul
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d near05_db"]
       interval: 5s
       retries: 5
     networks: [ws]

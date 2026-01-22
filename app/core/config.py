@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     STREAM_KEY_ENCRYPTION_KEY: str  # IVS 키 암호화용
     ADMIN_SECRET_KEY: str  # FastAPI Admin용
     ACCESS_TOKEN_EXPIRE_MINUTES: int  # 토큰 유효분
-    REFRESH_TOKEN_EXPIRE_DAYS: int  # 리프레시 토큰 유효일
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 리프레시 토큰 유효일
 
     # ADMIN 계정
     ADMIN_USERNAME: str

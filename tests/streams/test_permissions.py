@@ -9,7 +9,7 @@ from app.domains.streams.permissions import StreamPermission
 
 @pytest.mark.asyncio
 class TestStreamPermission:
-    def test_must_be_admin(self):
+    async def test_must_be_admin(self):
         # 관리자 통과
         admin = MagicMock(is_superuser=True)
         StreamPermission.must_be_admin(admin)

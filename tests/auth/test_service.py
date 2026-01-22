@@ -1,9 +1,12 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
+from app.core.security import create_refresh_token
+from app.domains.auth.schemas import TokenResponse
 from app.domains.auth.service import auth_service
+from app.domains.users.models import ProviderChoice, User
 from app.main import app
 
 
@@ -161,16 +164,13 @@ async def test_kakao_login_redirect():
 
 @pytest.mark.asyncio
 async def test_kakao_callback_endpoint(mocker):
-    """/auth/kakao/callback 엔드포인트 테스트"""
-    # 서비스 로직 모킹
     mock_service = mocker.patch(
         "app.domains.auth.router.auth_service.process_kakao_login", new_callable=AsyncMock
     )
-    mock_service.return_value = {
-        "access_token": "fake_jwt",
-        "token_type": "bearer",
-        "is_new_user": True,
-    }
+    # dict가 아닌 TokenResponse 객체로 반환하도록 수정
+    mock_service.return_value = TokenResponse(
+        access_token="fake_jwt", refresh_token="fake_refresh", token_type="bearer", is_new_user=True
+    )
 
     from httpx import ASGITransport
 
@@ -180,3 +180,41 @@ async def test_kakao_callback_endpoint(mocker):
     assert response.status_code == 200
     assert response.json()["access_token"] == "fake_jwt"
     mock_service.assert_called_once_with("test_code")
+
+
+@pytest.mark.asyncio
+async def test_logout_endpoint():
+    """로그아웃 시 쿠키 삭제 여부 확인"""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.post("/api/v1/auth/logout")
+
+    assert response.status_code == 204
+    # Set-Cookie 헤더에 refresh_token을 지우는 설정이 있는지 확인
+    set_cookie_header = response.headers.get("set-cookie", "")
+
+    # refresh_token이라는 키가 포함되어 있는지
+    assert "refresh_token" in set_cookie_header
+    # 값이 비어있거나(="" 또는 =;) 삭제 설정(Max-Age=0)이 포함되어 있는지 확인
+    assert 'refresh_token=""' in set_cookie_header or "Max-Age=0" in set_cookie_header
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_endpoint(initialize_tests):
+    """리프레시 토큰으로 액세스 토큰 갱신 테스트"""
+    user = await User.create(
+        provider_id="999",
+        provider=ProviderChoice.KAKAO,
+        nickname="del_me",
+        email="test@example.com",  # 이메일 등 필수 필드 확인
+    )
+    refresh_token = create_refresh_token(subject=user.id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # 클라이언트 쿠키에 리프레시 토큰 설정
+        ac.cookies.set("refresh_token", refresh_token)
+        response = await ac.post("/api/v1/auth/refresh")
+
+    assert response.status_code == 200
+    json_data = response.json()
+    assert "access_token" in json_data
+    assert "refresh_token" in json_data  # 새로운 리프레시 토큰도 함께 오는지 확인

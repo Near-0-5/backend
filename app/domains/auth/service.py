@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 
-from app.core.security import create_access_token
+from fastapi import Response
+
+from app.core.security import create_access_token, create_refresh_token
 from app.domains.auth.schemas import TokenResponse
 from app.domains.notifications.models import UserNoti
 from app.domains.users.models import ProviderChoice, User
@@ -64,7 +66,31 @@ class AuthService:
 
         # JWT 토큰 발급
         access_token = create_access_token(subject=user.id)
-        return TokenResponse(access_token=access_token, token_type="bearer", is_new_user=created)
+        refresh_token = create_refresh_token(subject=user.id)
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            is_new_user=created,
+        )
+
+    async def refresh_access_token(self, user_id: int) -> TokenResponse:
+        """리프레시 토큰을 이용한 액세스 토큰 재발급"""
+        # DB에서 유저 존재 확인 등의 추가 검증 가능
+        access_token = create_access_token(subject=user_id)
+        refresh_token = create_refresh_token(subject=user_id)
+
+        return TokenResponse(
+            access_token=access_token, refresh_token=refresh_token, is_new_user=False
+        )
+
+    async def logout_user(self, response: Response) -> None:
+        """리프레시 토큰 쿠키 삭제"""
+        response.delete_cookie(
+            key="refresh_token",
+            path="/",
+        )
 
 
-auth_service = AuthService()
+auth_service = AuthService()  # alias

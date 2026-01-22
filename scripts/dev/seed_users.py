@@ -8,10 +8,6 @@ from app.domains.users.models import ProviderChoice, User
 
 
 async def main() -> None:
-    # 프로덕션 차단
-    if settings.MODE == "prod":
-        raise RuntimeError("seed_users.py 는 prod 환경에서 실행할 수 없습니다.")
-
     await Tortoise.init(config=TORTOISE_ORM)
 
     await User.get_or_create(

@@ -140,7 +140,9 @@ class StreamAdminService:
         StreamPermission.must_be_admin(user)
 
         # DB 조회
-        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        session = await ConcertSession.get(id=session_id).prefetch_related(
+            "stream_channel", "concert"
+        )
         channel = session.stream_channel
 
         if not channel:

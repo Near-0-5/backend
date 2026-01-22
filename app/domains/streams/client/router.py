@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends, Path
 
 from app.api import deps
 from app.domains.streams import deps as streams_deps
-from app.domains.streams.service import StreamUserService
+from app.domains.streams.client.service import StreamUserService
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/streams", tags=["Streaming"])

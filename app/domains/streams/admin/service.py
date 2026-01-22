@@ -75,6 +75,7 @@ class StreamAdminService:
                 authorized=(session.access_level != AccessLevel.PUBLIC),
             )
 
+            # DB 저장 시 필드명 snake_case 맞춤
             channel_arn = ivs_res["channel"]["arn"]
             stream_key_raw = ivs_res["streamKey"]["value"]
 
@@ -122,13 +123,13 @@ class StreamAdminService:
             access_level=session.access_level,
             start_at=session.start_at,
             channel=IVSChannelSummary(
-                channel_arn=channel.channel_arn,
+                arn=channel.channel_arn,
                 ingest_endpoint=channel.ingest_endpoint,
                 playback_url=channel.playback_url,
                 latency_mode=channel.latency_mode,
-                channel_type=channel.type,
+                type=channel.type,
             ),
-            stream_key=stream_key_raw,  # 생성 시점에만 평문 노출
+            value=stream_key_raw,  # 생성 시점에만 평문 노출
         )
 
     async def get_stream_ingest_info(self, session_id: int, user: User) -> StreamIngestResponse:
@@ -163,19 +164,19 @@ class StreamAdminService:
             s = stream_res["stream"]
             live_metrics = StreamLiveMetrics(
                 health=s.get("health"),  # HEALTHY, STARVING, UNKNOWN
-                viewerCount=s.get("viewerCount", 0),
-                startTime=s.get("startTime"),
+                viewer_count=s.get("viewerCount", 0),
+                start_time=s.get("startTime"),
                 state=s.get("state"),
             )
 
         return StreamIngestResponse(
-            sessionId=session.id,
-            isLive=is_live,
-            concertTitle=session.concert.title,
-            ingestInfo=StreamIngestInfo(
-                ingestEndpoint=channel.ingest_endpoint,  # OBS 서버 (rtmps://)
-                streamKey=channel.get_stream_key(),  # OBS 스트림 키 (복호화)
+            session_id=session.id,
+            is_live=is_live,
+            concert_title=session.concert.title,
+            ingest_info=StreamIngestInfo(
+                ingest_endpoint=channel.ingest_endpoint,  # OBS 서버 (rtmps://)
+                value=channel.get_stream_key(),  # OBS 스트림 키 (복호화)
             ),
-            playbackUrl=channel.playback_url,
-            liveMetrics=live_metrics,
+            playback_url=channel.playback_url,
+            live_metrics=live_metrics,
         )

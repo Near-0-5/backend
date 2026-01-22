@@ -40,7 +40,7 @@ jobs:
         run: |
           docker build \
             -t $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG \
-            -f docker/DockerFile .
+            -f docker/Dockerfile.prod .
 
           docker push $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG
 

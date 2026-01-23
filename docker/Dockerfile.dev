@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY pyproject.toml uv.lock ./
 
 # dev 의존성 포함, .venv 생성
-RUN uv sync --locked
+RUN uv sync --locked --no-dev --no-install-project
 
 # 소스 복사
 COPY . .

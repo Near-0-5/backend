@@ -81,6 +81,7 @@ async def get_session_ingest_data(
 async def stream_monitor_page(
     request: Request,
     session_id: int = Path(..., description="모니터링할 콘서트 세션 ID"),
+    current_user: User = Depends(deps.get_current_user),
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         "stream_monitor.html",

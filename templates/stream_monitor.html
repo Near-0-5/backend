@@ -3,43 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <title>IVS 관리자 모니터링 - 세션 #{{ session_id }}</title>
-    <script src="https://player.live-video.net/1.48.0/amazon-ivs-player.min.js"></script>
+
+    <!-- IVS Player -->
+    <script src="https://player.live-video.net/1.48.0/amazon-ivs-player.min.js" defer></script>
+
     <style>
         body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f0f0f; color: #f1f1f1; margin: 0; padding: 20px; }
         .dashboard { display: grid; grid-template-columns: 420px 1fr; gap: 24px; max-width: 1600px; margin: 0 auto; }
         .card { background: #1a1a1a; padding: 24px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
 
-        /* 헤더 영역 */
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #333; padding-bottom: 15px; }
         h1 { font-size: 22px; margin: 0; }
 
-        /* 상태 배지 */
         .status-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #252525; padding: 12px; border-radius: 8px; }
-        .badge { padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; text-transform: uppercase; }
+        .badge { padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; }
         .live { background: #e91916; color: white; animation: pulse 2s infinite; }
         .offline { background: #444; color: #aaa; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-        /* 정보 텍스트 */
         p { margin: 15px 0 5px 0; font-size: 14px; color: #aaa; font-weight: bold; }
         pre { background: #000; padding: 12px; color: #00e676; border-radius: 6px; font-size: 13px; white-space: pre-wrap; word-break: break-all; border: 1px solid #222; margin: 0; }
 
-        /* 메트릭 영역 */
         .metric-group { margin-top: 25px; border-top: 1px solid #333; padding-top: 20px; }
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 15px; }
         .metric-label { color: #888; }
 
-        /* 비디오 플레이어 */
         .video-container { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; }
         video { width: 100%; height: 100%; display: block; }
+
         .playback-info { margin-top: 15px; font-size: 13px; color: #777; display: flex; justify-content: space-between; }
 
         button.primary { padding: 10px 20px; background: #3f51b5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         button.primary:hover { background: #303f9f; }
     </style>
 </head>
-<body>
 
+<body>
 <div class="header-bar">
     <div>
         <h1>세션 모니터링 <small style="color:#888;">#{{ session_id }}</small></h1>
@@ -79,37 +78,44 @@
 
     <div class="card">
         <div class="video-container">
-            <video id="video-player" controls playsinline></video>
+            <video id="video-player" muted playsinline controls></video>
         </div>
         <div class="playback-info">
             <span><strong>PLAYBACK URL:</strong> <span id="play-url">-</span></span>
             <span id="token-status" style="font-weight:bold;"></span>
         </div>
         <div style="margin-top: 8px; color: #555; font-size: 12px; line-height: 1.6;">
-          * 5초마다 데이터가 자동으로 동기화됩니다.<br>
-          * 비공개 채널인 경우 백엔드에서 발급된 Playback Token을 사용하여 재생합니다.
+            * 5초마다 데이터가 자동으로 동기화됩니다.<br>
+            * 비공개 채널인 경우 백엔드에서 발급된 Playback Token을 사용하여 재생합니다.
         </div>
     </div>
 </div>
 
 <script>
-    if (!IVSPlayer.isPlayerSupported()) {
+document.addEventListener("DOMContentLoaded", () => {
+    const IVS = window.IVSPlayer;
+    if (!IVS || typeof IVS.isPlayerSupported !== "function" || !IVS.isPlayerSupported()) {
         alert("IVS Player가 지원되지 않는 브라우저입니다.");
+        return;
     }
 
     const videoEl = document.getElementById("video-player");
-    const player = IVSPlayer.create();
+    const player = IVS.create();
     player.attachHTMLVideoElement(videoEl);
     player.setMuted(true);
-    player.setAutoplay(true);
+
+    player.addEventListener(IVS.PlayerEventType.ERROR, (e) => {
+        console.error("IVS ERROR:", e);
+    });
+
+    player.addEventListener(IVS.PlayerEventType.STATE_CHANGED, (state) => {
+        console.log("IVS STATE:", state);
+    });
 
     let currentSrc = null;
 
     async function fetchWithAuth(url) {
-        const res = await fetch(url, {
-            credentials: "include"
-        });
-
+        const res = await fetch(url, { credentials: "include" });
         if (res.status === 401) {
             window.location.href = "/login";
             return null;
@@ -117,7 +123,7 @@
         return res;
     }
 
-    async function refreshData() {
+    window.refreshData = async function () {
         try {
             const res = await fetchWithAuth(
                 `/api/v1/admin/streams/sessions/{{ session_id }}/ingest`
@@ -135,46 +141,44 @@
             const badge = document.getElementById("badge");
             const tokenStatus = document.getElementById("token-status");
 
-            if (data.isLive) {
-                badge.innerText = "AWS: ON-AIR";
-                badge.className = "badge live";
-
-                if (data.liveMetrics) {
-                    document.getElementById("m-health").innerText = data.liveMetrics.health;
-                    document.getElementById("m-viewers").innerText =
-                        data.liveMetrics.viewerCount.toLocaleString() + " 명";
-                    document.getElementById("m-start").innerText =
-                        new Date(data.liveMetrics.startTime).toLocaleTimeString();
-                }
-
-                let finalUrl = data.playbackUrl;
-                if (data.playbackToken) {
-                    finalUrl += `?token=${data.playbackToken}`;
-                    tokenStatus.innerText = "🔒 PRIVATE";
-                    tokenStatus.style.color = "#00e676";
-                } else {
-                    tokenStatus.innerText = "🔓 PUBLIC";
-                    tokenStatus.style.color = "#888";
-                }
-
-                if (currentSrc !== finalUrl) {
-                    currentSrc = finalUrl;
-                    player.load(finalUrl);
-                    player.play();
-                }
-            } else {
+            if (!data.isLive) {
                 badge.innerText = "AWS: OFFLINE";
                 badge.className = "badge offline";
-                document.getElementById("m-health").innerText = "-";
-                document.getElementById("m-viewers").innerText = "-";
-                document.getElementById("m-start").innerText = "-";
                 tokenStatus.innerText = "";
+                currentSrc = null;
                 player.pause();
+                return;
+            }
+
+            badge.innerText = "AWS: ON-AIR";
+            badge.className = "badge live";
+
+            if (data.liveMetrics) {
+                document.getElementById("m-health").innerText = data.liveMetrics.health;
+                document.getElementById("m-viewers").innerText = data.liveMetrics.viewerCount.toLocaleString() + " 명";
+                document.getElementById("m-start").innerText =
+                    new Date(data.liveMetrics.startTime).toLocaleTimeString();
+            }
+
+            let finalUrl = data.playbackUrl;
+            if (data.playbackToken) {
+                finalUrl += `?token=${data.playbackToken}`;
+                tokenStatus.innerText = "🔒 PRIVATE";
+                tokenStatus.style.color = "#00e676";
+            } else {
+                tokenStatus.innerText = "🔓 PUBLIC";
+                tokenStatus.style.color = "#888";
+            }
+
+            if (currentSrc !== finalUrl) {
+                currentSrc = finalUrl;
+                player.load(finalUrl);
+                player.play();
             }
         } catch (e) {
             console.error("Monitoring update failed:", e);
         }
-    }
+    };
 
     refreshData();
     const poll = setInterval(refreshData, 5000);
@@ -183,7 +187,7 @@
         clearInterval(poll);
         player.delete();
     });
+});
 </script>
-
 </body>
 </html>

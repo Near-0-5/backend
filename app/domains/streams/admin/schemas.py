@@ -117,4 +117,5 @@ class StreamIngestResponse(BaseModel):
     concert_title: str
     ingest_info: StreamIngestInfo
     playback_url: str
+    playback_token: str | None = None
     live_metrics: StreamLiveMetrics | None = None

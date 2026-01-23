@@ -20,12 +20,14 @@ from app.domains.streams.models import (
 )
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
-from app.integrations.aws_ivs import IVSClient
+from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider
+from app.integrations.aws_ivs.client import logger
 
 
 class StreamAdminService:
-    def __init__(self, ivs_client: IVSClient):
+    def __init__(self, ivs_client: IVSClient, playback_provider: IVSPlaybackProvider):
         self.ivs_client = ivs_client
+        self.playback_provider = playback_provider
 
     async def create_concert(self, data: ConcertCreateRequest, user: User) -> Concert:
         """
@@ -101,6 +103,11 @@ class StreamAdminService:
                     status_code=500, detail=f"DB 저장 실패로 인프라를 롤백했습니다: {str(db_error)}"
                 ) from db_error
 
+        except HTTPException:
+            if "session" in locals() and session.id:
+                await session.delete()
+            raise
+
         except Exception as e:
             # IVS 세팅 실패했으면 콘서트 세션 삭제
             if "session" in locals() and session.id:
@@ -132,6 +139,75 @@ class StreamAdminService:
             value=stream_key_raw,  # 생성 시점에만 평문 노출
         )
 
+    async def rotate_stream_key(self, session_id: int, user: User) -> str:
+        """
+        [Admin] 스트림 키 유출 시 재발급
+        """
+        StreamPermission.must_be_admin(user)
+
+        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        channel = session.stream_channel
+
+        # 스트림 키 삭제
+        existing_keys = self.ivs_client.list_all_stream_keys(channel.channel_arn)
+        for k in existing_keys:
+            self.ivs_client.delete_stream_key(k["arn"])
+
+        # 새 스트림 키 생성
+        new_key_res = self.ivs_client.create_stream_key(channel.channel_arn)
+        new_key_raw = new_key_res["streamKey"]["value"]
+
+        # DB 업데이트 (암호화 저장)
+        channel.set_stream_key(new_key_raw)
+        await channel.save(update_fields=["stream_key_encrypted"])
+
+        return new_key_raw
+
+    async def delete_session_with_infrastructure(self, session_id: int, user: User) -> None:
+        """
+        [Admin] 세션 삭제 및 연결된 IVS 채널 영구 제거
+        """
+        StreamPermission.must_be_admin(user)
+
+        # 채널 정보 조회를 위해 관계 로드
+        session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
+        if not session:
+            raise HTTPException(404, "존재하지 않는 세션입니다.")
+
+        # IVS 채널 삭제
+        if hasattr(session, "stream_channel") and session.stream_channel:
+            try:
+                self.ivs_client.delete_channel(session.stream_channel.channel_arn)
+            except Exception as e:
+                # 이미 AWS에서 지워졌을 수도 있으니까
+                logger.warning(f"AWS 채널 삭제 실패(이미 제거되었을 수 있음): {str(e)}")
+
+            # DB 삭제
+            await session.delete()
+
+    async def stop_stream_session(self, session_id: int, user: User) -> None:
+        """
+        [Admin] 라이브 방송 강제 중단 및 상태 종료 처리
+        """
+        StreamPermission.must_be_admin(user)
+
+        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        channel = session.stream_channel
+
+        if not channel:
+            raise HTTPException(404, "연결된 스트리밍 채널이 없습니다.")
+
+        # IVS 송출 강제 중단
+        try:
+            self.ivs_client.stop_stream(channel.channel_arn)
+        except Exception as e:
+            # 방송 중이 아닐 때 stop 호출하면 안되니까
+            logger.warning(f"AWS StopStream 호출 실패(이미 종료되었을 수 있음): {str(e)}")
+
+        # DB 상태 업데이트
+        session.status = StreamStatus.ENDED
+        await session.save(update_fields=["status"])
+
     async def get_stream_ingest_info(self, session_id: int, user: User) -> StreamIngestResponse:
         """
         [Admin] 송출 상세 정보 조회, 실시간 상태 확인
@@ -146,7 +222,17 @@ class StreamAdminService:
         channel = session.stream_channel
 
         if not channel:
-            raise HTTPException(404, "해당 세션에 연결된 IVS 채널이 업습니다.")
+            raise HTTPException(404, "해당 세션에 연결된 IVS 채널이 없습니다.")
+
+        playback_token = None
+
+        # 채널이 비공개(Private) 설정이 되어 있다면 토큰을 발급합니다.
+        if channel.is_private:
+            playback_token = self.playback_provider.sign_playback_token(
+                channel_arn=channel.channel_arn,
+                viewer_id=f"admin-{user.id}",
+                duration_sec=3600,  # 1시간
+            )
 
         # AWS IVS 헬스체크(방송 중 아니면 None)
         stream_res = self.ivs_client.get_stream_health(channel.channel_arn)
@@ -180,5 +266,6 @@ class StreamAdminService:
                 value=channel.get_stream_key(),  # OBS 스트림 키 (복호화)
             ),
             playback_url=channel.playback_url,
+            playback_token=playback_token,
             live_metrics=live_metrics,
         )

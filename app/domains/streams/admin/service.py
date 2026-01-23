@@ -20,13 +20,14 @@ from app.domains.streams.models import (
 )
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
-from app.integrations.aws_ivs import IVSClient
+from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider
 from app.integrations.aws_ivs.client import logger
 
 
 class StreamAdminService:
-    def __init__(self, ivs_client: IVSClient):
+    def __init__(self, ivs_client: IVSClient, playback_provider: IVSPlaybackProvider):
         self.ivs_client = ivs_client
+        self.playback_provider = playback_provider
 
     async def create_concert(self, data: ConcertCreateRequest, user: User) -> Concert:
         """
@@ -221,7 +222,17 @@ class StreamAdminService:
         channel = session.stream_channel
 
         if not channel:
-            raise HTTPException(404, "해당 세션에 연결된 IVS 채널이 업습니다.")
+            raise HTTPException(404, "해당 세션에 연결된 IVS 채널이 없습니다.")
+
+        playback_token = None
+
+        # 채널이 비공개(Private) 설정이 되어 있다면 토큰을 발급합니다.
+        if channel.is_private:
+            playback_token = self.playback_provider.sign_playback_token(
+                channel_arn=channel.channel_arn,
+                viewer_id=f"admin-{user.id}",
+                duration_sec=3600,  # 1시간
+            )
 
         # AWS IVS 헬스체크(방송 중 아니면 None)
         stream_res = self.ivs_client.get_stream_health(channel.channel_arn)
@@ -255,5 +266,6 @@ class StreamAdminService:
                 value=channel.get_stream_key(),  # OBS 스트림 키 (복호화)
             ),
             playback_url=channel.playback_url,
+            playback_token=playback_token,
             live_metrics=live_metrics,
         )

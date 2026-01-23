@@ -5,120 +5,216 @@
     <title>IVS 관리자 모니터링 - 세션 #{{ session_id }}</title>
     <script src="https://player.live-video.net/1.24.0/amazon-ivs-player.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f0f0f; color: #f1f1f1; margin: 0; padding: 20px; }
-        .dashboard { display: grid; grid-template-columns: 400px 1fr; gap: 24px; max-width: 1600px; margin: 0 auto; }
-        .card { background: #1a1a1a; padding: 24px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h1 { font-size: 24px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .badge { padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f0f0f; color: #f1f1f1; margin: 0; padding: 20px; }
+        .dashboard { display: grid; grid-template-columns: 420px 1fr; gap: 24px; max-width: 1600px; margin: 0 auto; }
+        .card { background: #1a1a1a; padding: 24px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+
+        /* 헤더 영역 */
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        h1 { font-size: 22px; margin: 0; }
+        .logout-btn { background: #444; font-size: 12px; margin-left: 8px; color: #eee; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+
+        /* 상태 배지 */
+        .status-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #252525; padding: 12px; border-radius: 8px; }
+        .badge { padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; text-transform: uppercase; }
         .live { background: #e91916; color: white; animation: pulse 2s infinite; }
         .offline { background: #444; color: #aaa; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-        pre { background: #000; padding: 12px; color: #00e676; border-radius: 6px; font-size: 13px; white-space: pre-wrap; word-break: break-all; border: 1px solid #222; min-height: 20px; }
-        button { width: 100%; padding: 12px; background: #3f51b5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
-        button:hover { background: #303f9f; }
-        video { width: 100%; border-radius: 8px; background: #000; aspect-ratio: 16/9; box-shadow: 0 8px 16px rgba(0,0,0,0.5); }
-        .metric-item { margin: 10px 0; font-size: 15px; }
-        .error-msg { color: #ff4d4d; font-weight: bold; font-size: 14px; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        /* 정보 텍스트 */
+        p { margin: 15px 0 5px 0; font-size: 14px; color: #aaa; font-weight: bold; }
+        pre { background: #000; padding: 12px; color: #00e676; border-radius: 6px; font-size: 13px; white-space: pre-wrap; word-break: break-all; border: 1px solid #222; margin: 0; }
+
+        /* 메트릭 영역 */
+        .metric-group { margin-top: 25px; border-top: 1px solid #333; padding-top: 20px; }
+        .metric-item { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 15px; }
+        .metric-label { color: #888; }
+
+        /* 비디오 플레이어 */
+        .video-container { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; }
+        video { width: 100%; height: 100%; display: block; }
+        .playback-info { margin-top: 15px; font-size: 13px; color: #777; display: flex; justify-content: space-between; }
+
+        button.primary { padding: 10px 20px; background: #3f51b5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button.primary:hover { background: #303f9f; }
     </style>
 </head>
 <body>
-    <h1>세션 모니터링 <small style="color:#888;">#{{ session_id }}</small></h1>
+
+    <div class="header-bar">
+        <div >
+            <h1>세션 모니터링 <small style="color:#888;">#{{ session_id }}</small></h1>
+            <div id="concert-title" style="color: #58a6ff; font-weight: bold; margin-top: 5px;">불러오는 중...</div>
+        </div>
+        <div>
+            <button class="primary" onclick="refreshData()">즉시 갱신</button>
+        </div>
+    </div>
+
     <div class="dashboard">
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <span id="badge" class="badge offline">LOADING...</span>
-                <button onclick="refreshData()" style="width: auto; padding: 6px 16px;">새로고침</button>
+            <div class="status-container">
+                <span id="badge" class="badge offline">AWS: OFFLINE</span>
+                <div style="text-align: right;">
+                    <small style="color: #888; display: block; font-size: 10px;">DB STATUS</small>
+                    <strong id="db-status" style="color: #f1f1f1;">-</strong>
+                </div>
             </div>
 
-            <div style="margin-bottom: 20px; padding: 10px; background: #252525; border-radius: 6px;">
-                <small style="color: #888;">System DB Status:</small>
-                <strong id="db-status" style="color: #58a6ff; margin-left: 5px;">-</strong>
-            </div>
-
-            <p><strong>Ingest Endpoint (OBS 서버)</strong></p>
+            <p>Ingest Endpoint</p>
             <pre id="endpoint">-</pre>
 
-            <p><strong>Stream Key (OBS 스트림 키)</strong></p>
-            <pre id="key">-</pre>
+            <p>Stream Key</p>
+            <pre id="key">********</pre>
 
-            <hr style="border: 0.5px solid #333; margin: 24px 0;">
-            <h3>실시간 메트릭 (AWS IVS)</h3>
-            <div id="metrics-content">데이터를 불러오는 중입니다...</div>
+            <div class="metric-group">
+                <h3>실시간 메트릭 (AWS IVS)</h3>
+                <div id="metrics-content">
+                    <div class="metric-item">
+                        <span class="metric-label">스트림 상태</span>
+                        <strong id="m-health">-</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">현재 시청자</span>
+                        <strong id="m-viewers">-</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">방송 시작 시간</span>
+                        <strong id="m-start">-</strong>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="card">
-            <video id="video-player" controls playsinline></video>
-            <div style="margin-top: 15px; font-size: 13px; color: #777;">
-                <strong>Playback URL:</strong> <span id="play-url">-</span>
+            <div class="video-container">
+                <video id="video-player" controls playsinline></video>
+            </div>
+            <div class="playback-info">
+                <span><strong>URL:</strong> <span id="play-url">-</span></span>
+                <span id="token-status" style="font-weight: bold;"></span>
+            </div>
+            <div style="margin-top: 20px; color: #555; font-size: 12px; line-height: 1.6;">
+                * 5초마다 데이터가 자동으로 동기화됩니다.<br>
+                * 비공개 채널인 경우 백엔드에서 발급된 Playback Token을 사용하여 재생합니다.
             </div>
         </div>
     </div>
 
     <script>
+        // 1. IVS 플레이어 초기화
         const player = IVSPlayer.create();
         player.attachTo(document.getElementById("video-player"));
+        player.setMuted(true); // 자동 재생 정책 준수
 
+        // 2. 인증 요청 래퍼
+        async function fetchWithAuth(url, options = {}) {
+            let token = localStorage.getItem("access_token");
+            options.headers = {
+                ...options.headers,
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            };
+
+            let res = await fetch(url, options);
+
+            if (res.status === 401) {
+                const refreshRes = await fetch("/api/v1/auth/refresh", { method: "POST" });
+                if (refreshRes.ok) {
+                    const refreshData = await refreshRes.json();
+                    localStorage.setItem("access_token", refreshData.access_token);
+                    options.headers["Authorization"] = `Bearer ${refreshData.access_token}`;
+                    res = await fetch(url, options);
+                } else {
+                    window.location.href = "/login";
+                }
+            }
+            return res;
+        }
+
+        async function logout() {
+            await fetch("/api/v1/auth/logout", { method: "POST" });
+            localStorage.removeItem("access_token");
+            window.location.href = "/login";
+        }
+
+        // 3. 데이터 동기화
         async function refreshData() {
             try {
-                // 중요: 스웨거 로그인 후 받은 토큰을 브라우저 개발자 도구 콘솔에서 아래와 같이 입력해야 합니다.
-                // localStorage.setItem("token", "여기에_토큰_복사");
-                const token = localStorage.getItem("token") || localStorage.getItem("access_token");
-
-                if (!token) {
-                    document.getElementById("metrics-content").innerHTML =
-                        "<span class='error-msg'>인증 토큰이 없습니다. <br>콘솔에서 localStorage에 토큰을 설정해주세요.</span>";
-                    return;
-                }
-
-                const res = await fetch(`/api/v1/admin/streams/sessions/{{ session_id }}/ingest`, {
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    }
-                });
-
-                if (res.status === 401) {
-                    document.getElementById("metrics-content").innerHTML = "<span class='error-msg'>인증 실패 (401)</span>";
-                    return;
-                }
+                const res = await fetchWithAuth(`/api/v1/admin/streams/sessions/{{ session_id }}/ingest`);
+                if (!res || !res.ok) return;
 
                 const data = await res.json();
 
-                // 1. UI 업데이트
-                document.getElementById("db-status").innerText = data.status;
+                // [데이터 업데이트]
+                document.getElementById("concert-title").innerText = data.concertTitle || "제목 없음";
+                document.getElementById("db-status").innerText = data.status; // READY, LIVE, ENDED...
                 document.getElementById("endpoint").innerText = data.ingestInfo.ingestEndpoint;
                 document.getElementById("key").innerText = data.ingestInfo.value;
                 document.getElementById("play-url").innerText = data.playbackUrl;
 
                 const badge = document.getElementById("badge");
-                const metrics = document.getElementById("metrics-content");
+                const mHealth = document.getElementById("m-health");
+                const mViewers = document.getElementById("m-viewers");
+                const mStart = document.getElementById("m-start");
+                const tokenStatus = document.getElementById("token-status");
 
-                if (data.isLive && data.liveMetrics) {
-                    badge.innerText = "LIVE";
+                if (data.isLive) {
+                    // AWS 송출 중
+                    badge.innerText = "AWS: ON-AIR";
                     badge.className = "badge live";
-                    const m = data.liveMetrics;
-                    metrics.innerHTML = `
-                        <div class="metric-item">헬스: <strong style="color:${m.health === 'HEALTHY' ? '#39d353' : '#ff9800'}">${m.health}</strong></div>
-                        <div class="metric-item">시청자 수: <strong>${m.viewerCount.toLocaleString()}명</strong></div>
-                        <div class="metric-item">송출 시작: ${new Date(m.startTime).toLocaleString()}</div>
-                    `;
-                    if (player.getSrc() !== data.playbackUrl) {
-                        player.load(data.playbackUrl);
+
+                    if (data.liveMetrics) {
+                        mHealth.innerText = data.liveMetrics.health;
+                        mHealth.style.color = data.liveMetrics.health === 'HEALTHY' ? '#39d353' : '#ff9800';
+                        mViewers.innerText = data.liveMetrics.viewerCount.toLocaleString() + " 명";
+                        mStart.innerText = new Date(data.liveMetrics.startTime).toLocaleTimeString();
+                    }
+
+                    // [플레이어 토큰 처리]
+                    let finalUrl = data.playbackUrl;
+                    if (data.playbackToken) {
+                        finalUrl += `?token=${data.playbackToken}`;
+                        tokenStatus.innerText = "🔒 AUTHORIZED (PRIVATE)";
+                        tokenStatus.style.color = "#00e676";
+                    } else {
+                        tokenStatus.innerText = "🔓 PUBLIC";
+                        tokenStatus.style.color = "#888";
+                    }
+
+                    // 비디오 소스 로드 (중복 로드 방지)
+                    if (player.getSrc() !== finalUrl) {
+                        console.log("Stream Source Updated:", finalUrl);
+                        player.load(finalUrl);
                         player.play();
                     }
                 } else {
-                    badge.innerText = "OFFLINE";
+                    // AWS 송출 중단됨
+                    badge.innerText = "AWS: OFFLINE";
                     badge.className = "badge offline";
-                    metrics.innerText = "현재 실시간 송출 데이터가 없습니다.";
-                    if (player.getSrc()) player.pause();
+                    mHealth.innerText = "-";
+                    mViewers.innerText = "-";
+                    mStart.innerText = "-";
+                    tokenStatus.innerText = "";
+
+                    // 필요한 경우 방송 중단 시 플레이어 초기화
+                    // if (player.getSrc()) player.pause();
                 }
+
             } catch (err) {
-                console.error("Fetch error:", err);
+                console.error("Monitoring Update Failed:", err);
             }
         }
 
+        // 초기 로드 및 5초 간격 실행
         refreshData();
-        setInterval(refreshData, 10000);
+        const poll = setInterval(refreshData, 5000);
+
+        // 페이지를 떠날 때 리소스 해제
+        window.addEventListener('beforeunload', () => {
+            clearInterval(poll);
+            player.delete();
+        });
     </script>
 </body>
 </html>

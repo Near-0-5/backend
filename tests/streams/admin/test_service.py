@@ -34,10 +34,18 @@ class TestStreamService:
         }
         return client
 
+    @pytest.fixture
+    def mock_playback_provider(self):
+        provider = MagicMock()
+        provider.sign_playback_token.return_value = "mock_playback_token_xyz"
+        return provider
+
     @pytest.mark.asyncio
-    async def test_admin_service_coverage(self, mock_ivs_client):
+    async def test_admin_service_coverage(self, mock_ivs_client, mock_playback_provider):
         """Admin 세션 생성 및 DB 에러 시 롤백 로직 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         now = datetime.now()
@@ -101,12 +109,14 @@ class TestStreamService:
             mock_ivs_client.delete_channel.assert_called_with(mock_channel_inst.channel_arn)
 
     @pytest.mark.asyncio
-    async def test_admin_ivs_permission_denied(self, mock_ivs_client):
+    async def test_admin_ivs_permission_denied(self, mock_ivs_client, mock_playback_provider):
         """AWS IAM 권한 부족 에러 핸들링"""
         error_res = {"Error": {"Code": "AccessDeniedException", "Message": "Denied"}}
         mock_ivs_client.create_channel.side_effect = ClientError(error_res, "CreateChannel")
 
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         with (
@@ -128,9 +138,13 @@ class TestStreamService:
             assert "AWS 권한 부족" in exc.value.detail
 
     @pytest.mark.asyncio
-    async def test_get_stream_ingest_info_success_live(self, mock_ivs_client):
+    async def test_get_stream_ingest_info_success_live(
+        self, mock_ivs_client, mock_playback_provider
+    ):
         """방송 중일 때 송출 정보 조회 및 DB 상태 동기화 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         # Mock 데이터 설정 (AWS IVS)
@@ -145,6 +159,7 @@ class TestStreamService:
 
         # DB 모델 Mocking
         mock_channel = MagicMock(spec=StreamChannel)
+        mock_channel.is_private = True
         mock_channel.channel_arn = "arn:aws:ivs:test"
         mock_channel.ingest_endpoint = "rtmps://test-ingest.com"
         mock_channel.playback_url = "https://test-play.com"
@@ -176,13 +191,17 @@ class TestStreamService:
             # 검증
             assert response.is_live is True
             assert response.live_metrics.viewer_count == 1500
+            assert response.playback_token == "mock_playback_token_xyz"
             assert mock_session.status == "LIVE"
             mock_session.save.assert_called_once()
+            mock_playback_provider.sign_playback_token.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_stream_ingest_info_no_channel(self, mock_ivs_client):
+    async def test_get_stream_ingest_info_no_channel(self, mock_ivs_client, mock_playback_provider):
         """세션에 IVS 채널이 연결되어 있지 않은 경우 404 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         mock_session = MagicMock(spec=ConcertSession)
@@ -202,9 +221,13 @@ class TestStreamService:
             assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_stream_ingest_info_permission_denied(self, mock_ivs_client):
+    async def test_get_stream_ingest_info_permission_denied(
+        self, mock_ivs_client, mock_playback_provider
+    ):
         """관리자 권한이 없을 때 예외 발생 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=False)  # 일반 유저
 
         with patch(
@@ -217,9 +240,11 @@ class TestStreamService:
             assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_rotate_stream_key_success(self, mock_ivs_client):
+    async def test_rotate_stream_key_success(self, mock_ivs_client, mock_playback_provider):
         """스트림 키 재발급 로직 검증 (기존 키 삭제 후 재생성)"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         # Mock 설정
@@ -252,9 +277,13 @@ class TestStreamService:
             mock_channel.save.assert_called_once_with(update_fields=["stream_key_encrypted"])
 
     @pytest.mark.asyncio
-    async def test_delete_session_with_infrastructure_success(self, mock_ivs_client):
+    async def test_delete_session_with_infrastructure_success(
+        self, mock_ivs_client, mock_playback_provider
+    ):
         """세션 및 IVS 인프라 삭제 로직 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         mock_channel = MagicMock(spec=StreamChannel)
@@ -280,9 +309,11 @@ class TestStreamService:
             mock_session.delete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_stop_stream_session_success(self, mock_ivs_client):
+    async def test_stop_stream_session_success(self, mock_ivs_client, mock_playback_provider):
         """라이브 강제 중단 및 상태 변경 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         mock_channel = MagicMock(spec=StreamChannel)
@@ -309,9 +340,11 @@ class TestStreamService:
             mock_session.save.assert_called_once_with(update_fields=["status"])
 
     @pytest.mark.asyncio
-    async def test_create_session_artist_not_found(self, mock_ivs_client):
+    async def test_create_session_artist_not_found(self, mock_ivs_client, mock_playback_provider):
         """존재하지 않는 아티스트 ID 요청 시 400 에러 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         session_data = SessionCreateRequest(
@@ -339,9 +372,13 @@ class TestStreamService:
             assert "존재하지 않는 아티스트" in exc.value.detail
 
     @pytest.mark.asyncio
-    async def test_delete_session_aws_failure_continues(self, mock_ivs_client):
+    async def test_delete_session_aws_failure_continues(
+        self, mock_ivs_client, mock_playback_provider
+    ):
         """AWS 채널 삭제 실패 시에도 DB 삭제는 진행되는지(Warning 로그) 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         # AWS 삭제 시 에러 발생 시뮬레이션
@@ -368,9 +405,11 @@ class TestStreamService:
             mock_session.delete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_stop_stream_aws_failure_continues(self, mock_ivs_client):
+    async def test_stop_stream_aws_failure_continues(self, mock_ivs_client, mock_playback_provider):
         """방송 중단 시 AWS 호출 에러가 나도 DB 상태는 변경되는지 검증"""
-        service = StreamAdminService(ivs_client=mock_ivs_client)
+        service = StreamAdminService(
+            ivs_client=mock_ivs_client, playback_provider=mock_playback_provider
+        )
         mock_user = MagicMock(is_admin=True)
 
         mock_ivs_client.stop_stream.side_effect = Exception("Already Stopped")

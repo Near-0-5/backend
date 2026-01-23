@@ -1,6 +1,7 @@
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.api.deps import get_current_user_from_refresh_cookie
+from app.api.deps import get_current_user, get_current_user_from_refresh_cookie
 from app.domains.streams.admin.service import StreamAdminService
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.permissions import StreamPermission
@@ -34,7 +35,33 @@ def get_stream_user_service(
 
 # 어드민 유저
 async def get_admin_user(
-    current_user: User = Depends(get_current_user_from_refresh_cookie),
+    request: Request,
 ) -> User:
-    StreamPermission.must_be_admin(current_user)
-    return current_user
+    user = None
+
+    # Authorization 헤더(Access Token)가 있는지 확인
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        try:
+            user = await get_current_user(
+                HTTPAuthorizationCredentials(scheme="Bearer", credentials=auth_header.split(" ")[1])
+            )
+        except HTTPException:
+            user = None
+
+    # 헤더에 없다면 쿠키(Refresh Token) 확인
+    if not user:
+        refresh_token = request.cookies.get("refresh_token")
+        if refresh_token:
+            user = await get_current_user_from_refresh_cookie(refresh_token)
+
+    # 둘 다 없다면 에러 발생
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="인증 정보가 없습니다. (Access Token 또는 Refresh Token 필요)",
+        )
+
+    # 관리자 권한 체크
+    StreamPermission.must_be_admin(user)
+    return user

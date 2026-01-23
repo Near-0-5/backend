@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.api.deps import get_current_user, get_current_user_from_refresh_cookie
+from app.api.deps import get_current_user, get_user_from_refresh_token
 from app.domains.streams.admin.service import StreamAdminService
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.permissions import StreamPermission
@@ -53,7 +53,7 @@ async def get_admin_user(
     if not user:
         refresh_token = request.cookies.get("refresh_token")
         if refresh_token:
-            user = await get_current_user_from_refresh_cookie(refresh_token)
+            user = await get_user_from_refresh_token(refresh_token)
 
     # 둘 다 없다면 에러 발생
     if not user:

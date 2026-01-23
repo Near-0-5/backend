@@ -72,7 +72,7 @@ async def test_get_admin_user_success_via_cookie():
             "app.domains.streams.deps.get_current_user", side_effect=HTTPException(status_code=401)
         ),
         patch(
-            "app.domains.streams.deps.get_current_user_from_refresh_cookie", new_callable=AsyncMock
+            "app.domains.streams.deps.get_user_from_refresh_token", new_callable=AsyncMock
         ) as mock_get_refresh,
     ):
         mock_get_refresh.return_value = mock_user

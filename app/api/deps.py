@@ -50,7 +50,7 @@ async def get_current_user(
     return user
 
 
-async def _get_user_from_refresh_token(refresh_token: str) -> User:
+async def get_user_from_refresh_token(refresh_token: str) -> User:
     try:
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
@@ -89,7 +89,7 @@ async def get_current_user_from_refresh_cookie(
             detail="Refresh token 존재하지 않음",
         )
 
-    return await _get_user_from_refresh_token(refresh_token)
+    return await get_user_from_refresh_token(refresh_token)
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -102,7 +102,7 @@ async def get_current_user_from_refresh_cookie_ws(ws: WebSocket) -> User:
         raise WebSocketException(code=1008)
 
     try:
-        return await _get_user_from_refresh_token(refresh_token)
+        return await get_user_from_refresh_token(refresh_token)
     except HTTPException as e:
         if e.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_404_NOT_FOUND):
             raise WebSocketException(code=1008) from e

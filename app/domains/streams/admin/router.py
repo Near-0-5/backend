@@ -2,7 +2,6 @@ from fastapi import APIRouter, Body, Depends, Path, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.api import deps
 from app.domains.streams import deps as streams_deps
 from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
@@ -12,6 +11,7 @@ from app.domains.streams.admin.schemas import (
     StreamIngestResponse,
 )
 from app.domains.streams.admin.service import StreamAdminService
+from app.domains.streams.deps import get_admin_user
 from app.domains.streams.models import Concert
 from app.domains.users.models import User
 
@@ -29,10 +29,10 @@ templates = Jinja2Templates(directory="templates")
 )
 async def create_concert(
     data: ConcertCreateRequest,
-    current_user: User = Depends(deps.get_current_user),
+    current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> Concert:
-    return await service.create_concert(data, current_user)
+    return await service.create_concert(data, current_admin)
 
 
 @router.post(
@@ -45,7 +45,7 @@ async def create_concert(
 async def create_concert_stream(
     concert_id: int = Path(..., description="콘서트 ID"),
     data: SessionCreateRequest = Body(..., description="새로운 콘서트 세션과 IVS config 상세 정보"),
-    current_user: User = Depends(deps.get_current_user),
+    current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> SessionResponse:
     """
@@ -53,7 +53,7 @@ async def create_concert_stream(
     2. AWS IVS `CreateChannel` API를 호출하여 송출/재생 엔드포인트를 확보합니다.
     3. 발급된 스트림 키는 내부 보안 정책에 따라 암호화하여 저장합니다.
     """
-    return await service.create_session_with_infrastructure(concert_id, data, current_user)
+    return await service.create_session_with_infrastructure(concert_id, data, current_admin)
 
 
 @router.delete(
@@ -64,10 +64,10 @@ async def create_concert_stream(
 )
 async def delete_concert_session(
     session_id: int = Path(..., description="삭제할 세션 ID"),
-    current_user: User = Depends(deps.get_current_user),
+    current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> None:
-    return await service.delete_session_with_infrastructure(session_id, current_user)
+    return await service.delete_session_with_infrastructure(session_id, current_admin)
 
 
 @router.post(
@@ -78,10 +78,10 @@ async def delete_concert_session(
 )
 async def rotate_session_stream_key(
     session_id: int = Path(..., description="키를 갱신할 세션 ID"),
-    current_user: User = Depends(deps.get_current_user),
+    current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> dict[str, str]:
-    new_key = await service.rotate_stream_key(session_id, current_user)
+    new_key = await service.rotate_stream_key(session_id, current_admin)
     return {"message": "스트림 키가 재발급되었습니다.", "value": new_key}
 
 
@@ -92,10 +92,10 @@ async def rotate_session_stream_key(
 )
 async def stop_live_stream(
     session_id: int = Path(..., description="중단할 세션 ID"),
-    current_user: User = Depends(deps.get_current_user),
+    current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> dict[str, str]:
-    await service.stop_stream_session(session_id, current_user)
+    await service.stop_stream_session(session_id, current_admin)
     return {"message": "방송이 종료 처리되었습니다."}
 
 
@@ -108,10 +108,10 @@ async def stop_live_stream(
 )
 async def get_session_ingest_data(
     session_id: int = Path(..., description="콘서트 세션 ID"),
-    current_user: User = Depends(deps.get_current_user),
+    current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> StreamIngestResponse:
-    return await service.get_stream_ingest_info(session_id, current_user)
+    return await service.get_stream_ingest_info(session_id, user=current_admin)
 
 
 @router.get(
@@ -124,8 +124,9 @@ async def get_session_ingest_data(
 async def stream_monitor_page(
     request: Request,
     session_id: int = Path(..., description="모니터링할 콘서트 세션 ID"),
+    current_admin: User = Depends(get_admin_user),
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         "stream_monitor.html",
-        {"request": request, "session_id": session_id},
+        {"request": request, "session_id": session_id, "is_admin": current_admin.is_superuser},
     )

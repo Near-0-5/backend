@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 import jwt
@@ -12,8 +13,6 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.domains.users.models import User
-
-import logging
 
 security = HTTPBearer()
 
@@ -95,6 +94,7 @@ async def get_current_user_from_refresh_cookie(
 
 logger = logging.getLogger("uvicorn.error")
 
+
 async def get_current_user_from_refresh_cookie_ws(ws: WebSocket) -> User:
     refresh_token = ws.cookies.get("refresh_token")
 
@@ -105,5 +105,5 @@ async def get_current_user_from_refresh_cookie_ws(ws: WebSocket) -> User:
         return await _get_user_from_refresh_token(refresh_token)
     except HTTPException as e:
         if e.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_404_NOT_FOUND):
-            raise WebSocketException(code=1008)
+            raise WebSocketException(code=1008) from e
         raise

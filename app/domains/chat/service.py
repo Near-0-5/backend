@@ -71,9 +71,7 @@ class ChatService:
 
         # 코드 최적화를 위한 시스템 메시지 전송 함수임.
         async def sys(text: str) -> None:
-            await self.manager.send_system_to_self(
-                ws, room_id=room_id, user_id=user_id, text=text
-            )
+            await self.manager.send_system_to_self(ws, room_id=room_id, user_id=user_id, text=text)
 
         try:
             # recent 알림 (본인에게만)

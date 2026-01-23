@@ -4,10 +4,9 @@ from datetime import timedelta
 
 from tortoise import Tortoise
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_refresh_token
 from app.core.tortoise_config import TORTOISE_ORM
 from app.domains.users.models import User
-from app.core.security import create_refresh_token
 
 
 async def main() -> None:
@@ -35,13 +34,14 @@ async def main() -> None:
 
     await Tortoise.close_connections()
 
-    print("="*30)
+    print("=" * 30)
     print(f"      토큰 발급 [ID: {user_id}]")
-    print("="*30)
+    print("=" * 30)
     print("\n[access token]")
     print(access_token)
     print("\n\n[refresh token]")
     print(refresh_token)
+
 
 if __name__ == "__main__":
     try:

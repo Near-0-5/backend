@@ -5,6 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.api.deps import get_current_user
+from app.domains.streams.deps import get_admin_user
 from app.main import app
 
 
@@ -100,12 +101,8 @@ class TestStreamRouter:
 
     @pytest.mark.asyncio
     async def test_validation_error_handling(self, client, mock_admin_user):
-        """validation 에러: 422"""
-
-        async def override_get_current_user():
-            return mock_admin_user
-
-        app.dependency_overrides[get_current_user] = override_get_current_user
+        """인증은 통과시키고 데이터만 틀리게 보내서 422 확인"""
+        app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
 
         try:
             # missing title

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.api.deps import get_current_user
+from app.domains.streams.deps import get_admin_user
 from app.domains.streams.models import AccessLevel, ChannelType, LatencyMode
 from app.main import app
 
@@ -41,7 +41,7 @@ class TestStreamRouter:
         async def override_get_current_user():
             return mock_admin_user
 
-        app.dependency_overrides[get_current_user] = override_get_current_user
+        app.dependency_overrides[get_admin_user] = override_get_current_user
 
         try:
             with (
@@ -139,7 +139,7 @@ class TestStreamRouter:
         @pytest.mark.asyncio
         async def test_delete_concert_session_success(self, client, mock_admin_user):
             """세션 삭제 엔드포인트 성공 케이스"""
-            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+            app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
 
             try:
                 with patch(
@@ -158,7 +158,7 @@ class TestStreamRouter:
         @pytest.mark.asyncio
         async def test_rotate_stream_key_success(self, client, mock_admin_user):
             """스트림 키 재발급 엔드포인트 성공 케이스"""
-            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+            app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
 
             try:
                 with patch(
@@ -178,7 +178,7 @@ class TestStreamRouter:
         @pytest.mark.asyncio
         async def test_stop_live_stream_success(self, client, mock_admin_user):
             """라이브 방송 강제 종료 엔드포인트 성공 케이스"""
-            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+            app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
 
             try:
                 with patch(
@@ -197,7 +197,7 @@ class TestStreamRouter:
         @pytest.mark.asyncio
         async def test_get_session_ingest_data_success(self, client, mock_admin_user):
             """송출 정보 조회 엔드포인트 성공 케이스"""
-            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+            app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
 
             try:
                 from app.domains.streams.admin.schemas import (
@@ -239,8 +239,13 @@ class TestStreamRouter:
                 app.dependency_overrides.clear()
 
         @pytest.mark.asyncio
-        async def test_stream_monitor_page(self, client):
+        async def test_stream_monitor_page(self, client, mock_admin_user):
             """모니터링 페이지 HTML 응답 검증"""
-            res = await client.get("/api/v1/admin/streams/sessions/1/monitor")
-            assert res.status_code == 200
-            assert "text/html" in res.headers["content-type"]
+            app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
+
+            try:
+                res = await client.get("/api/v1/admin/streams/sessions/1/monitor")
+                assert res.status_code == 200
+                assert "text/html" in res.headers["content-type"]
+            finally:
+                app.dependency_overrides.clear()

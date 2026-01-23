@@ -9,7 +9,7 @@ class ClientMessage(BaseModel):
 
 
 class ServerEvent(BaseModel):
-    type: Literal["message", "system"] = "message"
+    type: Literal["message", "system", "recent"] = "message"
     room_id: str
     user_id: str
     text: str

@@ -1,13 +1,34 @@
+from http.client import HTTPException
+from typing import Any
+
 from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import get_current_user_from_refresh_cookie  # 유저 인증 의존성
 from app.core.config import settings
+from app.core.security import create_access_token, create_refresh_token
 from app.domains.auth.schemas import TokenResponse
 from app.domains.auth.service import auth_service
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+# ============================================================
+@router.post("/login-test", summary="[개발용] 로그인")
+async def admin_login(
+    user_id: int = Query(..., description="어드민 1  |  유저 2"),
+) -> dict[str, Any]:
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    return {
+        "is_admin": user.is_superuser,
+        "access_token": create_access_token(user.id),
+        "refresh_token": create_refresh_token(user.id),
+        "token_type": "bearer",
+    }
 
 
 @router.get("/kakao/login", summary="카카오 서비스 로그인")

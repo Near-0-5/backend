@@ -56,6 +56,49 @@ async def create_concert_stream(
     return await service.create_session_with_infrastructure(concert_id, data, current_user)
 
 
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="콘서트 세션 및 인프라 삭제",
+    description="특정 세션을 삭제하고, 연결된 AWS IVS 채널 리소스를 즉시 삭제",
+)
+async def delete_concert_session(
+    session_id: int = Path(..., description="삭제할 세션 ID"),
+    current_user: User = Depends(deps.get_current_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> None:
+    return await service.delete_session_with_infrastructure(session_id, current_user)
+
+
+@router.post(
+    "/sessions/{session_id}/rotate-key",
+    summary="스트림 키 강제 재발급 (보안)",
+    description="기존의 모든 스트림 키를 무효화(삭제)하고 새로운 키 생성 \
+                 스트림 키가 유출되었을 때 사용합니다.",
+)
+async def rotate_session_stream_key(
+    session_id: int = Path(..., description="키를 갱신할 세션 ID"),
+    current_user: User = Depends(deps.get_current_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> dict[str, str]:
+    new_key = await service.rotate_stream_key(session_id, current_user)
+    return {"message": "스트림 키가 재발급되었습니다.", "value": new_key}
+
+
+@router.post(
+    "/sessions/{session_id}/stop",
+    summary="라이브 방송 강제 종료",
+    description="현재 진행 중인 AWS IVS 스트림 송출을 강제 중단시키고, 세션 상태를 'ENDED'로 변경",
+)
+async def stop_live_stream(
+    session_id: int = Path(..., description="중단할 세션 ID"),
+    current_user: User = Depends(deps.get_current_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> dict[str, str]:
+    await service.stop_stream_session(session_id, current_user)
+    return {"message": "방송이 종료 처리되었습니다."}
+
+
 @router.get(
     "/sessions/{session_id}/ingest",
     response_model=StreamIngestResponse,

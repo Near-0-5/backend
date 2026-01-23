@@ -69,13 +69,13 @@ class ChatService:
             # accept 전에 터질 수도 있고, accept 후 1008로 닫혔을 수도 있음.
             return
 
-        try:
-            # 코드 최적화를 위한 시스템 메시지 전송 함수임.
-            async def sys(text: str) -> None:
-                await self.manager.send_system_to_self(
-                    ws, room_id=room_id, user_id=user_id, text=text
-                )
+        # 코드 최적화를 위한 시스템 메시지 전송 함수임.
+        async def sys(text: str) -> None:
+            await self.manager.send_system_to_self(
+                ws, room_id=room_id, user_id=user_id, text=text
+            )
 
+        try:
             # recent 알림 (본인에게만)
             items = await get_recent_messages(room_id, limit=50)
             await ws.send_json({"type": "recent", "room_id": room_id, "items": items})
@@ -94,20 +94,24 @@ class ChatService:
                             ws.receive_json(), timeout=IDLE_TIMEOUT_SECONDS
                         )
                 except TimeoutError:
-                    await sys("무응답 시간 초과")
+                    # timeout 상황에선 이미 연결이 맛갔을 수도 있으니 send 실패해도 조용히 무시
+                    with suppress(Exception):
+                        await sys("무응답 시간 초과")
                     break
 
                 # 메시지 형식 검증 후 이상하면 예외처리 후 continue
                 try:
                     msg = ClientMessage.model_validate(data)
                 except ValidationError:
-                    await sys("메시지 형식이 올바르지 않숩나다")
+                    with suppress(Exception):
+                        await sys("메시지 형식이 올바르지 않숩나다")
                     continue
 
                 # rate limit 검증
                 ok = await rate_limit_ok(room_id, user_id)
                 if not ok:
-                    await sys("메시지는 2초에 1개만 보낼 수 있습니다")
+                    with suppress(Exception):
+                        await sys("메시지는 2초에 1개만 보낼 수 있습니다")
                     continue
 
                 # event build
@@ -124,11 +128,14 @@ class ChatService:
                 await self.manager.broadcast_json(room_id, evt)
 
         except WebSocketDisconnect:
-            await self.manager.disconnect(room_id, ws)
+            pass
 
         except Exception:
+            with suppress(Exception):
+                await self.manager.close_safe(ws, code=1011)
+            raise
+        finally:
             await self.manager.disconnect(room_id, ws)
-            await self.manager.close_safe(ws, code=1011)
 
     def _build_message_event(self, room_id: str, user_id: str, text: str) -> dict[str, Any]:
         return ServerEvent(

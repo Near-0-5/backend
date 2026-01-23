@@ -10,7 +10,7 @@ from pydantic_core import ValidationError
 from app.domains.chat.manager import ConnectionLimitError, ConnectionManager
 from app.domains.chat.repository import append_chat_message, get_recent_messages, rate_limit_ok
 from app.domains.chat.schemas import ClientMessage, ServerEvent
-from app.domains.streams.models import StreamChannel
+from app.domains.streams.models import ConcertSession
 
 
 def now_iso() -> str:
@@ -45,7 +45,7 @@ class ChatService:
         except ValueError as err:
             raise InvalidRoomId("Invalid stream_id") from err
 
-        exists = await StreamChannel.exists(id=stream_id)
+        exists = await ConcertSession.exists(id=stream_id)
         if not exists:
             raise StreamNotFound("stream not found")
 

@@ -19,4 +19,4 @@ async def chat_ws(ws: WebSocket, stream_id: str = Path(...), user: User = Depend
     except ChatPrecheckError as err:
         raise service.precheck_to_http_exc(err) from err
 
-    await service.handle_connection(ws=ws, room_id=room_id, user_id=user.id)
+    await service.handle_connection(ws=ws, room_id=room_id, user_id=str(user.id))

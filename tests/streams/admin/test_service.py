@@ -16,6 +16,7 @@ from app.domains.streams.models import (
     ConcertSession,
     LatencyMode,
     StreamChannel,
+    StreamStatus,
 )
 
 
@@ -214,3 +215,183 @@ class TestStreamService:
                 await service.get_stream_ingest_info(1, mock_user)
 
             assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_rotate_stream_key_success(self, mock_ivs_client):
+        """스트림 키 재발급 로직 검증 (기존 키 삭제 후 재생성)"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        # Mock 설정
+        mock_channel = MagicMock(spec=StreamChannel)
+        mock_channel.channel_arn = "arn:aws:ivs:test"
+        mock_channel.save = AsyncMock()
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.stream_channel = mock_channel
+
+        # list_all_stream_keys 반환값 설정
+        mock_ivs_client.list_all_stream_keys.return_value = [{"arn": "old_key_arn"}]
+        mock_ivs_client.create_stream_key.return_value = {"streamKey": {"value": "new_secret_key"}}
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
+        ):
+            mock_query = MagicMock()
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+            mock_get.return_value = mock_query
+
+            # 실행
+            new_key = await service.rotate_stream_key(session_id=1, user=mock_user)
+
+            # 검증
+            assert new_key == "new_secret_key"
+            mock_ivs_client.delete_stream_key.assert_called_with("old_key_arn")
+            mock_channel.set_stream_key.assert_called_with("new_secret_key")
+            mock_channel.save.assert_called_once_with(update_fields=["stream_key_encrypted"])
+
+    @pytest.mark.asyncio
+    async def test_delete_session_with_infrastructure_success(self, mock_ivs_client):
+        """세션 및 IVS 인프라 삭제 로직 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        mock_channel = MagicMock(spec=StreamChannel)
+        mock_channel.channel_arn = "arn:aws:ivs:to-delete"
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.stream_channel = mock_channel
+        mock_session.delete = AsyncMock()
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get_or_none") as mock_get_none,
+        ):
+            mock_query = MagicMock()
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+            mock_get_none.return_value = mock_query
+
+            # 실행
+            await service.delete_session_with_infrastructure(session_id=1, user=mock_user)
+
+            # 검증
+            mock_ivs_client.delete_channel.assert_called_with("arn:aws:ivs:to-delete")
+            mock_session.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_stream_session_success(self, mock_ivs_client):
+        """라이브 강제 중단 및 상태 변경 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        mock_channel = MagicMock(spec=StreamChannel)
+        mock_channel.channel_arn = "arn:aws:ivs:live-arn"
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.stream_channel = mock_channel
+        mock_session.save = AsyncMock()
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
+        ):
+            mock_query = MagicMock()
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+            mock_get.return_value = mock_query
+
+            # 실행
+            await service.stop_stream_session(session_id=1, user=mock_user)
+
+            # 검증
+            mock_ivs_client.stop_stream.assert_called_with("arn:aws:ivs:live-arn")
+            assert mock_session.status == StreamStatus.ENDED
+            mock_session.save.assert_called_once_with(update_fields=["status"])
+
+    @pytest.mark.asyncio
+    async def test_create_session_artist_not_found(self, mock_ivs_client):
+        """존재하지 않는 아티스트 ID 요청 시 400 에러 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        session_data = SessionCreateRequest(
+            session_name="Session 1",
+            access_level=AccessLevel.PUBLIC,
+            start_at=datetime.now(),
+            channel_config=ChannelConfig(latency_mode=LatencyMode.LOW, type=ChannelType.STANDARD),
+            artist_ids=[1, 999],  # 999는 존재하지 않음
+        )
+
+        with (
+            patch("app.domains.streams.models.Concert.get", new_callable=AsyncMock),
+            patch("app.domains.streams.models.ConcertSession.create", new_callable=AsyncMock),
+            patch(
+                "app.domains.streams.admin.service.Artist.filter", new_callable=AsyncMock
+            ) as mock_art_filter,
+        ):
+            # DB에는 아티스트 1명만 있다고 가정
+            mock_art_filter.return_value = [MagicMock(id=1)]
+
+            with pytest.raises(HTTPException) as exc:
+                await service.create_session_with_infrastructure(1, session_data, mock_user)
+
+            assert exc.value.status_code == 400
+            assert "존재하지 않는 아티스트" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_session_aws_failure_continues(self, mock_ivs_client):
+        """AWS 채널 삭제 실패 시에도 DB 삭제는 진행되는지(Warning 로그) 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        # AWS 삭제 시 에러 발생 시뮬레이션
+        mock_ivs_client.delete_channel.side_effect = Exception("AWS Delete Failed")
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.stream_channel = MagicMock(channel_arn="arn:aws:ivs:error")
+        mock_session.delete = AsyncMock()
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get_or_none") as mock_get_none,
+            patch("app.domains.streams.admin.service.logger") as mock_logger,
+        ):
+            mock_query = MagicMock()
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+            mock_get_none.return_value = mock_query
+
+            # 실행
+            await service.delete_session_with_infrastructure(1, mock_user)
+
+            # 검증: AWS 에러가 났지만 DB 삭제는 호출되어야 함
+            mock_logger.warning.assert_called()
+            mock_session.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_stream_aws_failure_continues(self, mock_ivs_client):
+        """방송 중단 시 AWS 호출 에러가 나도 DB 상태는 변경되는지 검증"""
+        service = StreamAdminService(ivs_client=mock_ivs_client)
+        mock_user = MagicMock(is_admin=True)
+
+        mock_ivs_client.stop_stream.side_effect = Exception("Already Stopped")
+
+        mock_session = MagicMock(spec=ConcertSession)
+        mock_session.stream_channel = MagicMock(channel_arn="arn:aws:ivs:live")
+        mock_session.save = AsyncMock()
+
+        with (
+            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
+            patch("app.domains.streams.admin.service.logger") as mock_logger,
+        ):
+            mock_query = MagicMock()
+            mock_query.prefetch_related = AsyncMock(return_value=mock_session)
+            mock_get.return_value = mock_query
+
+            # 실행
+            await service.stop_stream_session(1, mock_user)
+
+            # 검증: 에러 로그가 남고 상태는 ENDED로 바뀌어야 함
+            mock_logger.warning.assert_called()
+            assert mock_session.status == StreamStatus.ENDED
+            mock_session.save.assert_called_once()

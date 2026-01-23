@@ -89,9 +89,9 @@ class TestStreamRouter:
                     start_at=datetime.now(),
                     channel=IVSChannelSummary(
                         arn="arn:test",
-                        ingestEndpoint="rtmps://test",
-                        playbackUrl="https://test.m3u8",
-                        latencyMode=LatencyMode.LOW,
+                        ingest_endpoint="rtmps://test",
+                        playback_url="https://test.m3u8",
+                        latency_mode=LatencyMode.LOW,
                         type=ChannelType.STANDARD,
                     ),
                     value="sk_test",
@@ -117,3 +117,130 @@ class TestStreamRouter:
 
         finally:
             app.dependency_overrides.clear()
+
+    class TestStreamRouterExtended:
+        """Router 커버리지 향상을 위한 추가 테스트"""
+
+        @pytest.fixture
+        async def client(self):
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as ac:
+                yield ac
+
+        @pytest.fixture
+        def mock_admin_user(self):
+            user = MagicMock()
+            user.id = 1
+            user.is_admin = True
+            return user
+
+        @pytest.mark.asyncio
+        async def test_delete_concert_session_success(self, client, mock_admin_user):
+            """세션 삭제 엔드포인트 성공 케이스"""
+            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+
+            try:
+                with patch(
+                    "app.domains.streams.admin.service.StreamAdminService.delete_session_with_infrastructure",
+                    new_callable=AsyncMock,
+                ) as mock_delete:
+                    mock_delete.return_value = None
+
+                    res = await client.delete("/api/v1/admin/streams/sessions/1")
+                    assert res.status_code == 204
+                    mock_delete.assert_called_once()
+
+            finally:
+                app.dependency_overrides.clear()
+
+        @pytest.mark.asyncio
+        async def test_rotate_stream_key_success(self, client, mock_admin_user):
+            """스트림 키 재발급 엔드포인트 성공 케이스"""
+            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+
+            try:
+                with patch(
+                    "app.domains.streams.admin.service.StreamAdminService.rotate_stream_key",
+                    new_callable=AsyncMock,
+                ) as mock_rotate:
+                    mock_rotate.return_value = "new_sk_12345"
+
+                    res = await client.post("/api/v1/admin/streams/sessions/1/rotate-key")
+                    assert res.status_code == 200
+                    assert res.json()["value"] == "new_sk_12345"
+                    assert "재발급" in res.json()["message"]
+
+            finally:
+                app.dependency_overrides.clear()
+
+        @pytest.mark.asyncio
+        async def test_stop_live_stream_success(self, client, mock_admin_user):
+            """라이브 방송 강제 종료 엔드포인트 성공 케이스"""
+            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+
+            try:
+                with patch(
+                    "app.domains.streams.admin.service.StreamAdminService.stop_stream_session",
+                    new_callable=AsyncMock,
+                ) as mock_stop:
+                    mock_stop.return_value = None
+
+                    res = await client.post("/api/v1/admin/streams/sessions/1/stop")
+                    assert res.status_code == 200
+                    assert "종료" in res.json()["message"]
+
+            finally:
+                app.dependency_overrides.clear()
+
+        @pytest.mark.asyncio
+        async def test_get_session_ingest_data_success(self, client, mock_admin_user):
+            """송출 정보 조회 엔드포인트 성공 케이스"""
+            app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+
+            try:
+                from app.domains.streams.admin.schemas import (
+                    StreamIngestInfo,
+                    StreamIngestResponse,
+                    StreamLiveMetrics,
+                )
+
+                mock_response = StreamIngestResponse(
+                    session_id=1,
+                    is_live=True,
+                    concert_title="Test Concert",
+                    ingest_info=StreamIngestInfo(
+                        ingest_endpoint="rtmps://test.com",
+                        value="sk_test",
+                    ),
+                    playback_url="https://test.m3u8",
+                    live_metrics=StreamLiveMetrics(
+                        health="HEALTHY",
+                        viewer_count=100,
+                        start_time=datetime.now(),
+                        state="LIVE",
+                    ),
+                )
+
+                with patch(
+                    "app.domains.streams.admin.service.StreamAdminService.get_stream_ingest_info",
+                    new_callable=AsyncMock,
+                ) as mock_ingest:
+                    mock_ingest.return_value = mock_response
+
+                    res = await client.get("/api/v1/admin/streams/sessions/1/ingest")
+                    assert res.status_code == 200
+                    data = res.json()
+                    assert data["isLive"] is True
+                    assert data["liveMetrics"]["viewerCount"] == 100
+
+            finally:
+                app.dependency_overrides.clear()
+
+        @pytest.mark.asyncio
+        async def test_stream_monitor_page(self, client):
+            """모니터링 페이지 HTML 응답 검증"""
+            res = await client.get("/api/v1/admin/streams/sessions/1/monitor")
+            assert res.status_code == 200
+            assert "text/html" in res.headers["content-type"]

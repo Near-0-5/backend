@@ -7,6 +7,7 @@ from tortoise import Tortoise
 from app.core.security import create_access_token
 from app.core.tortoise_config import TORTOISE_ORM
 from app.domains.users.models import User
+from app.core.security import create_refresh_token
 
 
 async def main() -> None:
@@ -23,19 +24,24 @@ async def main() -> None:
     if not user:
         raise RuntimeError(f"admin(1), user(2) | 입력값: {user_id}")
 
-    token = create_access_token(
+    access_token = create_access_token(
         subject=user.id,
         expires_delta=timedelta(
             days=18
         ),  # 발표까지 남은 기간 (귀찮으니까 토큰 발급해서 가지고 있으셈)
     )
 
+    refresh_token = create_refresh_token(subject=user.id)
+
     await Tortoise.close_connections()
 
-    print("[access token]")
-    print(token)
-    print(f"\n\n[ ID: {user_id} ] - 토큰 발급 완료")
-
+    print("="*30)
+    print(f"      토큰 발급 [ID: {user_id}]")
+    print("="*30)
+    print("\n[access token]")
+    print(access_token)
+    print("\n\n[refresh token]")
+    print(refresh_token)
 
 if __name__ == "__main__":
     try:

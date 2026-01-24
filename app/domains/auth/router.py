@@ -31,7 +31,7 @@ async def admin_login(
         value=refresh_token,
         httponly=True,  # 자바스크립트 접근 방지 (보안)
         samesite="lax",  # CSRF 방지
-        secure=True,   # HTTPS에서 활성화
+        secure=True,  # HTTPS에서 활성화
         max_age=60 * 60 * 24 * 7,  # 7일간 유지
     )
 

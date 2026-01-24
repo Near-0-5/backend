@@ -1,7 +1,8 @@
+from fastapi import HTTPException, status
 from tortoise.functions import Count
 
 from app.domains.artists.models import Artist
-from app.domains.artists.schemas import ArtistListElement, ArtistListResponse, ArtistDetailResponse
+from app.domains.artists.schemas import ArtistDetailResponse, ArtistListElement, ArtistListResponse
 
 
 class ArtistService:

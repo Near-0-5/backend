@@ -6,6 +6,7 @@ from app.domains.streams.models import CategoryType
 from app.domains.users.models import ProviderChoice, User
 
 
+
 @pytest.mark.asyncio
 class TestArtistService:
     async def test_get_artists_pagination(self, initialize_tests):

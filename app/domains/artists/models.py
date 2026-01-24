@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from tortoise.fields import ForeignKeyRelation, ManyToManyRelation
 
     from app.domains.streams.models import ConcertArtist, ConcertSession
-    from app.domains.users.models import User
+    from app.domains.users.models import Follow, User
 
 
 # 그룹 형태

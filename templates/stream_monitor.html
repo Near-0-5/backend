@@ -94,7 +94,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const IVS = window.IVSPlayer;
-    if (!IVS || typeof IVS.isPlayerSupported !== "function" || !IVS.isPlayerSupported()) {
+    if (!IVS) {
         alert("IVS Player가 지원되지 않는 브라우저입니다.");
         return;
     }

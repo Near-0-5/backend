@@ -2,17 +2,16 @@ from enum import Enum
 
 from fastapi import APIRouter, Query, status
 
-from app.domains.artists.schemas import ArtistListResponse
+from app.domains.artists.schemas import ArtistListResponse, ArtistDetailResponse
 from app.domains.artists.service import artist_service
 
 router = APIRouter(prefix="/artists", tags=["artists"])
 
 
 class ArtistSortOrder(str, Enum):
-    LATEST = "latest"  # 최신 등록순
-    FOLLOWER = "follower"  # 팔로워 많은 순
-    NAME = "name"  # 이름 가나다순
-
+    LATEST = "latest"        # 최신 등록순
+    FOLLOWER = "follower"    # 팔로워 많은 순
+    NAME = "name"            # 이름 가나다순
 
 @router.get(
     "",
@@ -38,3 +37,17 @@ async def get_artist_list(
     return await artist_service.get_artists(
         page=page, page_size=page_size, search=search, category=category, sort_by=sort_by
     )
+
+@router.get(
+    "/{artist_id}",
+    response_model=ArtistDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="아티스트 상세 조회",
+)
+async def get_artist_detail(
+    artist_id: int # Path Parameter
+) -> ArtistDetailResponse:
+    """
+    특정 아티스트의 상세 정보를 조회합니다.
+    """
+    return await artist_service.get_artist_detail(artist_id=artist_id)

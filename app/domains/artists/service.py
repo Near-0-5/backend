@@ -1,7 +1,7 @@
 from tortoise.functions import Count
 
 from app.domains.artists.models import Artist
-from app.domains.artists.schemas import ArtistListElement, ArtistListResponse
+from app.domains.artists.schemas import ArtistListElement, ArtistListResponse, ArtistDetailResponse
 
 
 class ArtistService:
@@ -59,6 +59,31 @@ class ArtistService:
         ]
 
         return ArtistListResponse(total=total_count, page=page, page_size=page_size, items=items)
+
+    async def get_artist_detail(self, artist_id: int) -> ArtistDetailResponse:
+        # 아티스트 조회 및 팔로워 수 집계
+        artist = (
+            await Artist.filter(id=artist_id).annotate(follower_count=Count("followers")).first()
+        )
+
+        if not artist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="요청하신 아티스트를 찾을 수 없습니다.",
+            )
+
+        return ArtistDetailResponse(
+            id=artist.id,
+            name=artist.stage_name,  #
+            profile_image=artist.profile_img_url,  #
+            company=artist.agency,  #
+            description=artist.description,  #
+            category=artist.category_type,  #
+            debut_date=artist.debut_date,  #
+            member_count=artist.member_count,  #
+            group_type=artist.group_type,  #
+            follower_count=getattr(artist, "follower_count", 0),  #
+        )
 
 
 artist_service = ArtistService()

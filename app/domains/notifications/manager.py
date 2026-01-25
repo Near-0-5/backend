@@ -18,7 +18,6 @@ class NotificationConnectionManager:
         self._max_per_user = max_per_user
         self._subscriber_task: asyncio.Task[None] | None = None
 
-
     async def connect(self, user_id: str, ws: WebSocket) -> None:
         await ws.accept()
         async with self._lock:
@@ -49,7 +48,6 @@ class NotificationConnectionManager:
         if self._subscriber_task and not self._subscriber_task.done():
             return
         self._subscriber_task = asyncio.create_task(self._subscriber_loop())
-
 
     def _total_connections_locked(self) -> int:
         return sum(len(conns) for conns in self._users.values())
@@ -82,7 +80,6 @@ class NotificationConnectionManager:
             room.discard(ws)
         if not room:
             self._users.pop(user_id, None)
-
 
     async def _send_to_targets(
         self, targets: list[WebSocket], payload: dict[str, Any]

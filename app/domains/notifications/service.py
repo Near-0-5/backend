@@ -30,10 +30,11 @@ def _build_schedule(start_at: datetime) -> dict[NotiKind, datetime]:
 
 def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
     start_at = session.start_at
-    if start_at.tzinfo is None:
-        start_at = start_at.replace(tzinfo=KST)
-    else:
-        start_at = start_at.astimezone(KST)
+    start_at = (
+        start_at.replace(tzinfo=KST)
+        if start_at.tzinfo is None
+        else start_at.astimezone(KST)
+    )
     start_str = start_at.strftime("%Y-%m-%d %H:%M")
 
     if kind == NotiKind.HOUR_1:
@@ -151,10 +152,14 @@ class NotificationService:
         now = now_kst()
         until = now + timedelta(hours=hours_ahead)
 
-        sessions = await ConcertSession.filter(
-            start_at__gte=now,
-            start_at__lte=until,
-        ).exclude(status=StreamStatus.ENDED).prefetch_related("concert", "lineup")
+        sessions = (
+            await ConcertSession.filter(
+                start_at__gte=now,
+                start_at__lte=until,
+            )
+            .exclude(status=StreamStatus.ENDED)
+            .prefetch_related("concert", "lineup")
+        )
 
         total = 0
         for session in sessions:
@@ -163,9 +168,9 @@ class NotificationService:
 
     async def deliver_concert_notification(self, noti: ConcertNoti) -> bool:
         """알림을 발행하고 연결된 WS로 전달."""
-        payload = NotificationEvent(
-            notification=NotificationItem.model_validate(noti)
-        ).model_dump(mode="json")
+        payload = NotificationEvent(notification=NotificationItem.model_validate(noti)).model_dump(
+            mode="json"
+        )
         await notification_manager.publish(str(noti.user_id), payload)
         return True
 
@@ -192,9 +197,7 @@ class NotificationService:
         filters: list[Q] = []
 
         if artist_ids:
-            filters.append(
-                Q(noti_setting__artist_noti=True, followed_artists__id__in=artist_ids)
-            )
+            filters.append(Q(noti_setting__artist_noti=True, followed_artists__id__in=artist_ids))
 
         filters.append(Q(fav_categories__category=session.concert.category))
 

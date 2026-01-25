@@ -23,7 +23,9 @@ async def _run_with_db(coro):
 
 @celery_app.task(name="app.domains.notifications.tasks.schedule_session_notifications")
 def schedule_session_notifications(session_id: int) -> int:
-    return asyncio.run(_run_with_db(notification_service.schedule_session_notifications(session_id)))
+    return asyncio.run(
+        _run_with_db(notification_service.schedule_session_notifications(session_id))
+    )
 
 
 @celery_app.task(name="app.domains.notifications.tasks.schedule_upcoming_session_notifications")
@@ -52,26 +54,24 @@ async def _dispatch_due_notifications(batch_size: int) -> int:
     )
     total += await _dispatch_notifications(due_query, now, batch_size)
 
-    start_query = (
-        ConcertNoti.filter(
-            status=NotiStatus.PENDING,
-            kind=NotiKind.START,
-            session__status=StreamStatus.LIVE,
-        )
-        .order_by("send_at")
-    )
+    start_query = ConcertNoti.filter(
+        status=NotiStatus.PENDING,
+        kind=NotiKind.START,
+        session__status=StreamStatus.LIVE,
+    ).order_by("send_at")
     total += await _dispatch_notifications(start_query, now, batch_size)
 
     return total
+
 
 async def _dispatch_notifications(query, now, batch_size: int) -> int:
     items = await query.limit(batch_size)
     sent = 0
 
     for noti in items:
-        claimed = await ConcertNoti.filter(
-            id=noti.id, status=NotiStatus.PENDING
-        ).update(status=NotiStatus.PROCESSING, updated_at=now)
+        claimed = await ConcertNoti.filter(id=noti.id, status=NotiStatus.PENDING).update(
+            status=NotiStatus.PROCESSING, updated_at=now
+        )
         if not claimed:
             continue
 
@@ -87,8 +87,6 @@ async def _dispatch_notifications(query, now, batch_size: int) -> int:
             )
             sent += 1
         else:
-            await ConcertNoti.filter(id=noti.id).update(
-                status=NotiStatus.FAILED, updated_at=now
-            )
+            await ConcertNoti.filter(id=noti.id).update(status=NotiStatus.FAILED, updated_at=now)
 
     return sent

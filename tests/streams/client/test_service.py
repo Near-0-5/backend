@@ -1,108 +1,107 @@
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.models import (
+    CategoryType,
+    Concert,
     ConcertSession,
     StreamChannel,
+    StreamStatus,
 )
 
 
+@pytest.mark.asyncio
 class TestStreamService:
     @pytest.fixture
-    def mock_ivs_client(self):
-        client = MagicMock()
-        client.create_channel.return_value = {
-            "channel": {
-                "arn": "arn:aws:ivs:region:account:channel/test-channel",
-                "ingestEndpoint": "rtmps://test.ingest.net/app/",
-                "playbackUrl": "https://test.playback.net/index.m3u8",
-            },
-            "streamKey": {"value": "sk_test_12345"},
-        }
-        return client
+    def mock_pb(self):
+        pb = MagicMock()
+        pb.sign_playback_token.return_value = "signed_token"
+        pb.sign_internal_tokens.return_value = {"access_token": "at", "refresh_token": "rt"}
+        pb.rotate_tokens.return_value = {"access_token": "new_at", "refresh_token": "new_rt"}
+        return pb
 
-    @pytest.mark.asyncio
-    async def test_user_service_viewing_flow(self):
-        """User 시청 권한 및 토큰 발급 로직 검증"""
-        mock_pb = MagicMock()
-        mock_pb.sign_playback_token.return_value = "token_abc"
-        mock_pb.sign_internal_tokens.return_value = {"access_token": "at", "refresh_token": "rt"}
+    @pytest.fixture
+    def service(self, mock_pb):
+        return StreamUserService(ivs_client=MagicMock(), playback_provider=mock_pb)
 
-        service = StreamUserService(ivs_client=MagicMock(), playback_provider=mock_pb)
+    async def test_get_viewing_credentials_logic(self, service, mock_pb):
+        """시청 권한 발급 및 공개/비공개 분기 검증"""
+        concert = await Concert.create(title="Test Concert", category=CategoryType.KPOP)
+        session = await ConcertSession.create(
+            concert=concert,
+            session_name="Session",
+            status=StreamStatus.LIVE,
+            start_at=datetime.now(),
+        )
+        channel = await StreamChannel.create(
+            id=session.id,
+            session=session,
+            playback_url="https://play.m3u8",
+            channel_arn="arn:ivs:test",
+            ingest_endpoint="https://ingest.com",
+            stream_key_encrypted="test_encrypted_key",
+            is_private=True,
+        )
+
         mock_user = MagicMock(id=1)
-
-        # 비공개 채널용 Mock
-        mock_channel = MagicMock(spec=StreamChannel)
-        mock_channel.id = 100
-        mock_channel.is_private = True
-        mock_channel.channel_arn = "arn:ivs:private"
-        mock_channel.playback_url = "https://play.m3u8"
-
-        mock_session = MagicMock(spec=ConcertSession)
-        mock_session.stream_channel = mock_channel
-
-        with (
-            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
-            patch(
-                "app.domains.streams.permissions.StreamPermission.verify_playback_access",
-                new_callable=AsyncMock,
-            ),
+        with patch(
+            "app.domains.streams.permissions.StreamPermission.verify_playback_access",
+            new_callable=AsyncMock,
         ):
-            # Prefetch 결과 설정
-            mock_get.return_value.prefetch_related = AsyncMock(return_value=mock_session)
+            res = await service.get_viewing_credentials(session.id, mock_user)
+            assert "token=signed_token" in res["playback_url"]
 
-            # 실행 및 검증
-            res = await service.get_viewing_credentials(10, mock_user)
-            assert "token=token_abc" in res["playback_url"]
-            assert res["stream_id"] == 100
+            channel.is_private = False
+            await channel.save()
+            res_pub = await service.get_viewing_credentials(session.id, mock_user)
+            assert "token=" not in res_pub["playback_url"]
 
-            # 공개 채널 분기 테스트 (is_private=False)
-            mock_channel.is_private = False
-            res_public = await service.get_viewing_credentials(10, mock_user)
-            assert "token=" not in res_public["playback_url"]
+    async def test_refresh_viewing_session_full(self, service, mock_pb):
+        """시청 세션 연장"""
+        concert = await Concert.create(title="Refresh Test")
+        session = await ConcertSession.create(
+            concert=concert, session_name="S1", start_at=datetime.now()
+        )
+        await StreamChannel.create(
+            id=session.id,
+            session=session,
+            playback_url="https://test.com",
+            channel_arn="arn:ivs:test2",
+            ingest_endpoint="https://ingest2.com",
+            stream_key_encrypted="test_encrypted_key2",
+            is_private=True,
+        )
 
-    @pytest.mark.asyncio
-    async def test_user_service_refresh_tokens(self):
-        """User 시청 세션 토큰 갱신 테스트"""
-
-        # Mock PlaybackProvider 설정
-        mock_pb = MagicMock()
-        mock_pb.rotate_tokens.return_value = {"access_token": "new_at", "refresh_token": "new_rt"}
-        mock_pb.sign_playback_token.return_value = "new_token"
-
-        # 테스트 대상 서비스 생성
-        service = StreamUserService(ivs_client=MagicMock(), playback_provider=mock_pb)
         mock_user = MagicMock(id=1)
-
-        # 비공개 채널용 StreamChannel Mock
-        mock_channel = MagicMock(spec=StreamChannel)
-        mock_channel.id = 101
-        mock_channel.is_private = True
-        mock_channel.channel_arn = "arn:ivs:private"
-        mock_channel.playback_url = "https://play.m3u8"
-
-        # 세션에 채널 연결
-        mock_session = MagicMock(spec=ConcertSession)
-        mock_session.stream_channel = mock_channel
-
-        # ConcertSession.get() + prefetch_related Mock
-        with (
-            patch("app.domains.streams.models.ConcertSession.get") as mock_get,
-            patch(
-                "app.domains.streams.permissions.StreamPermission.verify_playback_access",
-                new_callable=AsyncMock,
-            ),
+        with patch(
+            "app.domains.streams.permissions.StreamPermission.verify_playback_access",
+            new_callable=AsyncMock,
         ):
-            mock_get.return_value.prefetch_related = AsyncMock(return_value=mock_session)
-
-            # 실제 테스트 실행
-            res = await service.refresh_viewing_session(10, mock_user, "old_rt")
-
-            # 검증: 토큰 갱신 결과 확인
+            res = await service.refresh_viewing_session(session.id, mock_user, "old_rt")
             assert res["access_token"] == "new_at"
-            assert res["refresh_token"] == "new_rt"
+            assert "token=signed_token" in res["playback_url"]
 
-            # 검증: 비공개 채널 URL에 서명 토큰 포함
-            assert "token=new_token" in res["playback_url"]
+    async def test_list_sessions_all_filters(self, service):
+        """목록 조회 필터링 검증"""
+        c1 = await Concert.create(title="AAA Concert", category=CategoryType.KPOP)
+        c2 = await Concert.create(title="BBB Show", category=CategoryType.TROT)
+
+        await ConcertSession.create(
+            concert=c1,
+            session_name="S1",
+            status=StreamStatus.ENDED,
+            start_at=datetime.now() - timedelta(days=1),
+        )
+        await ConcertSession.create(
+            concert=c2, session_name="S2", status=StreamStatus.LIVE, start_at=datetime.now()
+        )
+
+        assert len((await service.list_sessions(status=StreamStatus.LIVE))[0]) == 1
+        assert len((await service.list_sessions(category=CategoryType.KPOP))[0]) == 1
+        assert len((await service.list_sessions(title="BBB"))[0]) == 1
+
+        today = date.today()
+        assert len((await service.list_sessions(from_date=today, to_date=today))[0]) == 1

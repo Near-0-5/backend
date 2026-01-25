@@ -185,3 +185,10 @@ class TestStreamService:
         with pytest.raises(HTTPException) as exc:
             await service.get_sessions_detail(user, 99999)  # 존재하지 않는 세션
         assert exc.value.status_code == 404
+
+    async def test_get_status_not_found(self, service):
+        """없는 콘서트 세션 조회"""
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_status(99999)
+        assert exc_info.value.status_code == 404
+        assert "콘서트 세션 정보를 찾을 수 없습니다." in str(exc_info.value.detail)

@@ -140,3 +140,20 @@ class TestStreamRouter:
             assert data["lineup"][0]["name"] == "ArtistX"
         finally:
             app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    class TestStreamRouter:
+        async def test_get_status_endpoint(self, client):
+            """상태 조회 검증"""
+            # AsyncMock으로 상태 반환
+            mock_service = AsyncMock()
+            mock_service.get_status.return_value = "LIVE"
+
+            app.dependency_overrides[streams_deps.get_stream_user_service] = lambda: mock_service
+
+            try:
+                res = await client.get("/api/v1/streams/sessions/1/status")
+                assert res.status_code == 200
+                assert res.json() == "LIVE"
+            finally:
+                app.dependency_overrides.clear()

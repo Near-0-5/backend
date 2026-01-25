@@ -1,10 +1,20 @@
-"""Celery 앱 생성.
+from celery import Celery
 
-여기에 넣을 것:
-- Celery('app', broker=..., backend=...)
-- tasks autodiscover (notifications.tasks 등)
-- 직렬화/타임존 설정
+from app.core.config import settings
+from app.tasks.beat_schedule import beat_schedule
 
-주의:
-- FastAPI 앱과는 별도 프로세스로 worker를 실행함.
-"""
+celery_app = Celery(
+    "app",
+    broker=settings.REDIS_URL,
+    backend=settings.REDIS_URL,
+    include=["app.domains.notifications.tasks"],
+)
+
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="Asia/Seoul",
+    enable_utc=False,
+    beat_schedule=beat_schedule,
+)

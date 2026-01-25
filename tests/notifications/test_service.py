@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -42,7 +42,7 @@ async def test_normalize_start_at_handles_naive_and_aware() -> None:
     assert normalized.tzinfo == KST
     assert normalized.hour == 10
 
-    aware = datetime(2024, 1, 1, 1, 0, tzinfo=timezone.utc)
+    aware = datetime(2024, 1, 1, 1, 0, tzinfo=UTC)
     normalized = _normalize_start_at(aware)
     assert normalized.tzinfo == KST
     assert normalized.hour == 10
@@ -52,7 +52,9 @@ async def test_normalize_start_at_handles_naive_and_aware() -> None:
 async def test_build_schedule_and_content_variants() -> None:
     concert = await Concert.create(title="Notice", category=CategoryType.KPOP)
     start_at = datetime(2024, 1, 2, 8, 0)
-    session = await ConcertSession.create(concert=concert, session_name="Session A", start_at=start_at)
+    session = await ConcertSession.create(
+        concert=concert, session_name="Session A", start_at=start_at
+    )
     await session.fetch_related("concert")
 
     schedule = _build_schedule(start_at)
@@ -136,7 +138,9 @@ async def test_schedule_session_notifications_returns_zero_for_ended() -> None:
 @pytest.mark.asyncio
 async def test_schedule_session_notifications_returns_zero_for_no_targets() -> None:
     concert = await Concert.create(title="NoTarget", category=CategoryType.KPOP)
-    session = await ConcertSession.create(concert=concert, session_name="NoTarget", start_at=now_kst())
+    session = await ConcertSession.create(
+        concert=concert, session_name="NoTarget", start_at=now_kst()
+    )
 
     service = NotificationService()
     with patch.object(service, "_resolve_target_user_ids", new=AsyncMock(return_value=[])):
@@ -164,7 +168,9 @@ async def test_schedule_upcoming_sessions_filters_and_calls() -> None:
     dummy_query = _DummyQuery([ready_session])
     with (
         patch("app.domains.notifications.service.ConcertSession.filter", return_value=dummy_query),
-        patch.object(service, "schedule_session_notifications", new=AsyncMock(return_value=1)) as mock_sched,
+        patch.object(
+            service, "schedule_session_notifications", new=AsyncMock(return_value=1)
+        ) as mock_sched,
     ):
         total = await service.schedule_upcoming_sessions(hours_ahead=2)
 
@@ -183,7 +189,9 @@ async def test_deliver_concert_notification_publishes() -> None:
         nickname="publish_user",
     )
     concert = await Concert.create(title="Deliver", category=CategoryType.KPOP)
-    session = await ConcertSession.create(concert=concert, session_name="Delivery", start_at=now_kst())
+    session = await ConcertSession.create(
+        concert=concert, session_name="Delivery", start_at=now_kst()
+    )
     noti = await ConcertNoti.create(
         user=user,
         session=session,
@@ -195,7 +203,9 @@ async def test_deliver_concert_notification_publishes() -> None:
     )
 
     service = NotificationService()
-    with patch("app.domains.notifications.service.notification_manager.publish", new=AsyncMock()) as mock_pub:
+    with patch(
+        "app.domains.notifications.service.notification_manager.publish", new=AsyncMock()
+    ) as mock_pub:
         ok = await service.deliver_concert_notification(noti)
 
     assert ok is True
@@ -212,9 +222,14 @@ async def test_handle_ws_connection_disconnects() -> None:
     ws.receive_text = AsyncMock(side_effect=WebSocketDisconnect())
 
     with (
-        patch("app.domains.notifications.service.notification_manager.ensure_subscriber", new=AsyncMock()),
+        patch(
+            "app.domains.notifications.service.notification_manager.ensure_subscriber",
+            new=AsyncMock(),
+        ),
         patch("app.domains.notifications.service.notification_manager.connect", new=AsyncMock()),
-        patch("app.domains.notifications.service.notification_manager.disconnect", new=AsyncMock()) as mock_disconnect,
+        patch(
+            "app.domains.notifications.service.notification_manager.disconnect", new=AsyncMock()
+        ) as mock_disconnect,
     ):
         await service.handle_ws_connection(ws, user_id=1)
 
@@ -227,12 +242,17 @@ async def test_handle_ws_connection_runtime_error_closes() -> None:
     ws = AsyncMock()
 
     with (
-        patch("app.domains.notifications.service.notification_manager.ensure_subscriber", new=AsyncMock()),
+        patch(
+            "app.domains.notifications.service.notification_manager.ensure_subscriber",
+            new=AsyncMock(),
+        ),
         patch(
             "app.domains.notifications.service.notification_manager.connect",
             new=AsyncMock(side_effect=RuntimeError("busy")),
         ),
-        patch("app.domains.notifications.service.notification_manager.disconnect", new=AsyncMock()) as mock_disconnect,
+        patch(
+            "app.domains.notifications.service.notification_manager.disconnect", new=AsyncMock()
+        ) as mock_disconnect,
     ):
         await service.handle_ws_connection(ws, user_id=1)
 

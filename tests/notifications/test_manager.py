@@ -118,7 +118,9 @@ async def test_manager_ensure_subscriber_creates_task() -> None:
     dummy_task = SimpleNamespace(done=lambda: False)
 
     with (
-        patch("app.domains.notifications.manager.asyncio.create_task", return_value=dummy_task) as create_task,
+        patch(
+            "app.domains.notifications.manager.asyncio.create_task", return_value=dummy_task
+        ) as create_task,
         patch.object(manager, "_subscriber_loop", new=AsyncMock()),
     ):
         await manager.ensure_subscriber()
@@ -145,9 +147,7 @@ async def test_manager_decode_and_parse_pubsub() -> None:
     assert manager._parse_pubsub_message({"type": "message", "data": None}) is None
     assert manager._parse_pubsub_message({"type": "message", "data": "{"}) is None
     assert (
-        manager._parse_pubsub_message(
-            {"type": "message", "data": '{"user_id": "", "payload": {}}'}
-        )
+        manager._parse_pubsub_message({"type": "message", "data": '{"user_id": "", "payload": {}}'})
         is None
     )
     assert (

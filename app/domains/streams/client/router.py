@@ -6,7 +6,11 @@ from fastapi.params import Query
 
 from app.api import deps
 from app.domains.streams import deps as streams_deps
-from app.domains.streams.client.schemas import SessionItem, SessionListResponse
+from app.domains.streams.client.schemas import (
+    SessionDetailResponse,
+    SessionItem,
+    SessionListResponse,
+)
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.models import CategoryType, StreamStatus
 from app.domains.users.models import User
@@ -109,3 +113,22 @@ async def list_sessions(
         ],
         next_cursor=next_cursor,
     )
+
+
+@router.get(
+    "/sessions/{session_id}", response_model=SessionDetailResponse, summary="공연 상세 정보 조회"
+)
+async def get_session_detail(
+    session_id: int = Path(..., description="콘서트 세션 ID"),
+    current_user: User = Depends(deps.get_current_user),
+    service: StreamUserService = Depends(streams_deps.get_stream_user_service),
+) -> SessionDetailResponse:
+    return await service.get_sessions_detail(current_user, session_id)
+
+
+@router.get("/sessions/{session_id}/status", summary="실시간 스트리밍 상태")
+async def get_session_status(
+    session_id: int = Path(..., description="콘서트 세션 ID"),
+    service: StreamUserService = Depends(streams_deps.get_stream_user_service),
+) -> StreamStatus:
+    return await service.get_status(session_id)

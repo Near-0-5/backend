@@ -3,7 +3,12 @@ from typing import TYPE_CHECKING
 
 from cryptography.fernet import Fernet
 from tortoise import fields, models
-from tortoise.fields import ForeignKeyRelation, ManyToManyRelation, OneToOneRelation
+from tortoise.fields import (
+    ForeignKeyRelation,
+    ManyToManyRelation,
+    OneToOneRelation,
+    ReverseRelation,
+)
 
 from app.core.config import settings
 
@@ -132,7 +137,7 @@ class ConcertSession(models.Model):
 
     if TYPE_CHECKING:
         stream_channel: "StreamChannel"
-        artist_mappings: ForeignKeyRelation["ConcertArtist"]
+        artist_mappings: ReverseRelation["ConcertArtist"]
         stream_sessions: ForeignKeyRelation["StreamSession"]
         vods: ForeignKeyRelation["StreamVod"]
         scheduled_notis: fields.ReverseRelation["ConcertNoti"]

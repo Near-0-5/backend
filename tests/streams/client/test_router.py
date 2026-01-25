@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.api import deps
 from app.domains.streams import deps as streams_deps
+from app.domains.streams.client.schemas import ArtistItem, SessionDetailResponse
 from app.main import app
 
 
@@ -80,3 +81,79 @@ class TestStreamRouter:
     async def test_list_sessions_validation_error(self, client):
         res = await client.get("/api/v1/streams/sessions", params={"limit": 0})
         assert res.status_code == 422
+
+    async def test_get_session_detail_router(self, client, mock_user):
+        """상세 조회 검증"""
+        app.dependency_overrides[deps.get_current_user] = lambda: mock_user
+
+        mock_session = MagicMock()
+        mock_session.id = 100
+        mock_session.session_name = "Session Detail"
+        mock_session.status = "LIVE"
+        mock_session.start_at = datetime.now()
+        mock_session.end_at = datetime.now() + timedelta(hours=2)
+        mock_session.concert.title = "Concert Detail"
+        mock_session.concert.thumbnail_url = "https://thumb_detail.png"
+        mock_session.concert.category = "K-POP"
+        mock_session.concert.description = "Concert Desc"
+
+        artist_mock = MagicMock()
+        artist_mock.id = 10
+        artist_mock.stage_name = "ArtistX"
+        artist_mock.group_type = "SOLO"
+        artist_mock.profile_img_url = "https://artistx.png"
+        artist_mock.agency = "AgencyX"
+        mapping_mock = MagicMock()
+        mapping_mock.artist = artist_mock
+        mapping_mock.is_main = False
+        mock_session.artist_mappings = [mapping_mock]
+
+        mock_service = AsyncMock()
+        mock_service.get_sessions_detail.return_value = SessionDetailResponse(
+            id=mock_session.id,
+            concert_title=mock_session.concert.title,
+            session_name=mock_session.session_name,
+            thumbnail_url=mock_session.concert.thumbnail_url,
+            category=mock_session.concert.category,
+            status=mock_session.status,
+            description=mock_session.concert.description,
+            lineup=[
+                ArtistItem(
+                    id=mapping_mock.artist.id,
+                    name=mapping_mock.artist.stage_name,
+                    type=mapping_mock.artist.group_type,
+                    profile_img_url=mapping_mock.artist.profile_img_url,
+                    agency=mapping_mock.artist.agency,
+                    is_main=mapping_mock.is_main,
+                )
+            ],
+            start_at=mock_session.start_at,
+            end_at=mock_session.end_at,
+        )
+        app.dependency_overrides[streams_deps.get_stream_user_service] = lambda: mock_service
+
+        try:
+            res = await client.get("/api/v1/streams/sessions/100")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["concert_title"] == "Concert Detail"
+            assert data["lineup"][0]["name"] == "ArtistX"
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    class TestStreamRouter:
+        async def test_get_status_endpoint(self, client):
+            """상태 조회 검증"""
+            # AsyncMock으로 상태 반환
+            mock_service = AsyncMock()
+            mock_service.get_status.return_value = "LIVE"
+
+            app.dependency_overrides[streams_deps.get_stream_user_service] = lambda: mock_service
+
+            try:
+                res = await client.get("/api/v1/streams/sessions/1/status")
+                assert res.status_code == 200
+                assert res.json() == "LIVE"
+            finally:
+                app.dependency_overrides.clear()

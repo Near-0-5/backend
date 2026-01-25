@@ -8,6 +8,7 @@ from app.core.tortoise_config import TORTOISE_ORM
 from app.domains.streams.models import (
     AccessLevel,
     ChannelType,
+    ConcertArtist,
     ConcertSession,
     LatencyMode,
     StreamChannel,
@@ -31,6 +32,21 @@ async def main() -> None:
             "concert_id": 2,
         },
     )
+    await ConcertArtist.get_or_create(
+        artist_id=1,
+        session_id=1,
+        defaults={
+            "is_admin": True,
+        },
+    )
+    await ConcertArtist.get_or_create(
+        artist_id=2,
+        session_id=1,
+        defaults={
+            "is_admin": False,
+        },
+    )
+
     await StreamChannel.get_or_create(
         id=1,
         defaults={
@@ -56,6 +72,13 @@ async def main() -> None:
             "start_at": datetime.now() + timedelta(hours=5),
             "end_at": datetime.now() + timedelta(hours=8),
             "concert_id": 2,
+        },
+    )
+    await ConcertArtist.get_or_create(
+        artist_id=3,
+        session_id=2,
+        defaults={
+            "is_admin": True,
         },
     )
     await StreamChannel.get_or_create(
@@ -85,7 +108,13 @@ async def main() -> None:
             "concert_id": 2,
         },
     )
-
+    await ConcertArtist.get_or_create(
+        artist_id=2,
+        session_id=3,
+        defaults={
+            "is_admin": True,
+        },
+    )
     await StreamChannel.get_or_create(
         id=3,
         defaults={

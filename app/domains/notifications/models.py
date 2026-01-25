@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 class NotiKind(str, Enum):
+    DAY_BEFORE = "DAY_BEFORE"
     HOUR_1 = "HOUR_1"
     MIN_30 = "MIN_30"
     START = "START"

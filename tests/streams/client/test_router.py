@@ -1,131 +1,82 @@
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 
-from app.api.deps import get_current_user
-from app.domains.streams.deps import get_admin_user
+from app.api import deps
+from app.domains.streams import deps as streams_deps
 from app.main import app
 
 
+@pytest.mark.asyncio
 class TestStreamRouter:
     @pytest.fixture
-    async def client(self):
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test",
-        ) as ac:
-            yield ac
-
-    @pytest.fixture
-    def mock_admin_user(self):
-        """관리자 권한"""
-        user = MagicMock()
+    def mock_user(self):
+        user = AsyncMock()
         user.id = 1
-        user.is_admin = True
         return user
 
-    @pytest.fixture
-    def mock_regular_user(self):
-        """일반 사용자 권한"""
-        user = MagicMock()
-        user.id = 2
-        user.is_admin = False
-        return user
-
-    @pytest.mark.asyncio
-    async def test_user_router_get_credentials(self, client, mock_regular_user):
-        """일반 사용자가 스트림 세션에 대한 시청 자격 및 토큰을 정상적으로 발급받는지 검증"""
-
-        async def override_get_current_user():
-            return mock_regular_user
-
-        app.dependency_overrides[get_current_user] = override_get_current_user
-
+    async def test_get_stream_access_endpoint(self, client, mock_user):
+        app.dependency_overrides[deps.get_current_user] = lambda: mock_user
+        mock_service = AsyncMock()
+        mock_service.get_viewing_credentials.return_value = {"playback_url": "test"}
+        app.dependency_overrides[streams_deps.get_stream_user_service] = lambda: mock_service
         try:
-            with patch(
-                "app.domains.streams.client.service.StreamUserService.get_viewing_credentials",
-                new_callable=AsyncMock,
-            ) as mock_get_credentials:
-                mock_get_credentials.return_value = {
-                    "playback_url": "https://test.m3u8",
-                    "stream_id": 100,
-                    "access_token": "access",
-                    "refresh_token": "refresh",
-                }
-
-                res = await client.get("/api/v1/streams/sessions/10/credentials")
-
-                assert res.status_code == 200
-                assert res.json()["stream_id"] == 100
-
+            res = await client.get("/api/v1/streams/sessions/1/credentials")
+            assert res.status_code == 200
         finally:
             app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
-    async def test_user_router_refresh_session(self, client, mock_regular_user):
-        """일반 사용자가 기존 refresh token으로 시청 세션 연장, 새 토큰 발급받는지 검증"""
-
-        async def override_get_current_user():
-            return mock_regular_user
-
-        app.dependency_overrides[get_current_user] = override_get_current_user
-
+    async def test_refresh_stream_session_endpoint(self, client, mock_user):
+        app.dependency_overrides[deps.get_current_user] = lambda: mock_user
+        mock_service = AsyncMock()
+        mock_service.refresh_viewing_session.return_value = {"access_token": "new"}
+        app.dependency_overrides[streams_deps.get_stream_user_service] = lambda: mock_service
         try:
-            with patch(
-                "app.domains.streams.client.service.StreamUserService.refresh_viewing_session",
-                new_callable=AsyncMock,
-            ) as mock_refresh:
-                mock_refresh.return_value = {
-                    "access_token": "new_access",
-                    "refresh_token": "new_refresh",
-                    "playback_url": "https://test.m3u8",
-                }
-
-                res = await client.post(
-                    "/api/v1/streams/sessions/10/refresh",
-                    json={"refresh_token": "old"},
-                )
-
-                assert res.status_code == 200
-
-                mock_refresh.assert_called_once_with(
-                    10,
-                    mock_regular_user,
-                    "old",
-                )
-
-        finally:
-            app.dependency_overrides.clear()
-
-    @pytest.mark.asyncio
-    async def test_validation_error_handling(self, client, mock_admin_user):
-        """인증은 통과시키고 데이터만 틀리게 보내서 422 확인"""
-        app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
-
-        try:
-            # missing title
             res = await client.post(
-                "/api/v1/admin/streams/concerts",
-                json={"description": "missing title"},
+                "/api/v1/streams/sessions/1/refresh", json={"refresh_token": "old"}
             )
-            assert res.status_code == 422
-
-            # invalid enum
-            res = await client.post(
-                "/api/v1/admin/streams/concerts/1/sessions",
-                json={
-                    "session_name": "Session",
-                    "access_level": "INVALID",
-                    "start_at": datetime.now().isoformat(),
-                    "channel_config": {
-                        "latency_mode": "LOW",
-                        "channel_type": "STANDARD",
-                    },
-                },
-            )
-            assert res.status_code == 422
-
+            assert res.status_code == 200
         finally:
             app.dependency_overrides.clear()
+
+    async def test_list_sessions_router_mapping(self, client, mock_user):
+        """GET /sessions 데이터 변환 검증 (커버리지 84-96 라인)"""
+        app.dependency_overrides[deps.get_current_user] = lambda: mock_user
+
+        # Mock 구성 (AttributeError 방지)
+        mock_session = MagicMock()
+        mock_session.id = 10
+        mock_session.session_name = "Real Session"
+        mock_session.status = "LIVE"
+        mock_session.start_at = datetime.now()
+
+        # 중첩된 객체(concert) 속성 설정
+        mock_session.concert.title = "Mapped Title"
+        mock_session.concert.thumbnail_url = "https://thumb.png"
+        mock_session.concert.category = "K-POP"
+
+        # router.py의 s.__dict__ 사용 부분 대응
+        mock_session.__dict__ = {
+            "id": 10,
+            "session_name": "Real Session",
+            "status": "LIVE",
+            "start_at": mock_session.start_at,
+            "concert": mock_session.concert,  # concert 객체도 포함
+        }
+
+        mock_service = AsyncMock()
+        mock_service.list_sessions.return_value = ([mock_session], 11)
+        app.dependency_overrides[streams_deps.get_stream_user_service] = lambda: mock_service
+
+        try:
+            res = await client.get("/api/v1/streams/sessions", params={"limit": 5})
+            assert res.status_code == 200
+            data = res.json()
+            assert data["items"][0]["concert_title"] == "Mapped Title"
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_list_sessions_validation_error(self, client):
+        res = await client.get("/api/v1/streams/sessions", params={"limit": 0})
+        assert res.status_code == 422

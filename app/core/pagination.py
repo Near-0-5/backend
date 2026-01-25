@@ -1,16 +1,15 @@
 from collections.abc import Sequence
-from typing import TypeVar
 
+from tortoise import Model
 from tortoise.queryset import QuerySet
 
-T = TypeVar("T")
 
-async def paginate_cursor(
-        queryset: QuerySet[T],
-        cursor: int | None,
-        limit: int,
-        cursor_field: str = "id",
-        order_by: str = "-id"
+async def paginate_cursor[T: Model](
+    queryset: QuerySet[T],
+    cursor: int | None,
+    limit: int,
+    cursor_field: str = "id",
+    order_by: str = "-id",
 ) -> tuple[Sequence[T], int | None]:
     """
     범용 커서 페이지네이션 함수
@@ -18,7 +17,7 @@ async def paginate_cursor(
     # 커서 필터 적용
     if cursor is not None:
         is_desc = order_by.startswith("-")
-        op = "lt" if is_desc else "gt" # less than(<), greater than(>)
+        op = "lt" if is_desc else "gt"  # less than(<), greater than(>)
         queryset = queryset.filter(**{f"{cursor_field}__{op}": cursor})
 
     # limit + 1개를 조회하여 다음 페이지 존재 여부 확인

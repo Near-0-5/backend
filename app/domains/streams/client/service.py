@@ -181,3 +181,9 @@ class StreamUserService:
             start_at=session.start_at,
             end_at=session.end_at,
         )
+
+    async def get_status(self, session_id: int) -> StreamStatus:
+        session = await ConcertSession.get_or_none(id=session_id)
+        if not session:
+            raise HTTPException(404, "콘서트 세션 정보를 찾을 수 없습니다.")
+        return session.status

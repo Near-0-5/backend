@@ -124,3 +124,11 @@ async def get_session_detail(
     service: StreamUserService = Depends(streams_deps.get_stream_user_service),
 ) -> SessionDetailResponse:
     return await service.get_sessions_detail(current_user, session_id)
+
+
+@router.get("/sessions/{session_id}/status", summary="실시간 스트리밍 상태")
+async def get_session_status(
+    session_id: int = Path(..., description="콘서트 세션 ID"),
+    service: StreamUserService = Depends(streams_deps.get_stream_user_service),
+) -> StreamStatus:
+    return await service.get_status(session_id)

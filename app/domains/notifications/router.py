@@ -7,7 +7,6 @@ from app.domains.users.models import User
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-
 @router.websocket("/ws")
 async def notifications_ws(
     ws: WebSocket,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import cast
 
 from fastapi import WebSocket, WebSocketDisconnect
 from tortoise.exceptions import IntegrityError
@@ -21,11 +22,7 @@ _SCHEDULE_OFFSETS = {
 
 
 def _normalize_start_at(start_at: datetime) -> datetime:
-    return (
-        start_at.replace(tzinfo=KST)
-        if start_at.tzinfo is None
-        else start_at.astimezone(KST)
-    )
+    return start_at.replace(tzinfo=KST) if start_at.tzinfo is None else start_at.astimezone(KST)
 
 
 def _build_schedule(start_at: datetime) -> dict[NotiKind, datetime]:
@@ -75,9 +72,12 @@ class NotificationService:
         total_created = 0
 
         for kind, send_at in schedule_map.items():
-            existing_ids = await ConcertNoti.filter(
-                session_id=session.id, kind=kind, user_id__in=user_ids
-            ).values_list("user_id", flat=True)
+            existing_ids = cast(
+                "list[int]",
+                await ConcertNoti.filter(
+                    session_id=session.id, kind=kind, user_id__in=user_ids
+                ).values_list("user_id", flat=True),
+            )
             missing_ids = sorted(set(user_ids) - set(existing_ids))
             if not missing_ids:
                 continue
@@ -102,9 +102,11 @@ class NotificationService:
             except IntegrityError:
                 created = 0
                 for noti in notis:
+                    user_id = noti.user_id
+                    session_id = noti.session_id
                     _, is_created = await ConcertNoti.get_or_create(
-                        user_id=noti.user_id,
-                        session_id=noti.session_id,
+                        user_id=user_id,
+                        session_id=session_id,
                         kind=noti.kind,
                         defaults={
                             "title": noti.title,
@@ -143,7 +145,8 @@ class NotificationService:
         payload = NotificationEvent(notification=NotificationItem.model_validate(noti)).model_dump(
             mode="json"
         )
-        await notification_manager.publish(str(noti.user_id), payload)
+        user_id = noti.user_id
+        await notification_manager.publish(str(user_id), payload)
         return True
 
     async def handle_ws_connection(self, ws: WebSocket, *, user_id: int) -> None:
@@ -177,11 +180,12 @@ class NotificationService:
         for clause in filters[1:]:
             combined |= clause
 
-        users = (
+        users = cast(
+            "list[int]",
             await User.filter(noti_setting__live_noti=True)
             .filter(combined)
             .distinct()
-            .values_list("id", flat=True)
+            .values_list("id", flat=True),
         )
         return list(users)
 

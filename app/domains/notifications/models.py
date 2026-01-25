@@ -48,6 +48,10 @@ class ConcertNoti(models.Model):
         "models.ConcertSession", related_name="scheduled_notis"
     )
 
+    if TYPE_CHECKING:
+        user_id: int
+        session_id: int
+
     kind = fields.CharEnumField(NotiKind, index=True)
 
     title = fields.CharField(max_length=100)

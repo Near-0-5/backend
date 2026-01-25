@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.domains.notifications.models import NotiKind, NotiStatus
 
+
 class NotificationItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

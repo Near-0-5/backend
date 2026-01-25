@@ -1,5 +1,8 @@
 import asyncio
 import logging
+from collections.abc import Coroutine
+from datetime import datetime
+from typing import Any
 
 from tortoise import Tortoise
 
@@ -13,7 +16,7 @@ from app.tasks.celery_app import celery_app
 logger = logging.getLogger("app.notifications")
 
 
-async def _run_with_db(coro):
+async def _run_with_db[T](coro: Coroutine[Any, Any, T]) -> T:
     await Tortoise.init(config=TORTOISE_ORM)
     try:
         return await coro
@@ -21,21 +24,27 @@ async def _run_with_db(coro):
         await Tortoise.close_connections()
 
 
-@celery_app.task(name="app.domains.notifications.tasks.schedule_session_notifications")
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.domains.notifications.tasks.schedule_session_notifications"
+)
 def schedule_session_notifications(session_id: int) -> int:
     return asyncio.run(
         _run_with_db(notification_service.schedule_session_notifications(session_id))
     )
 
 
-@celery_app.task(name="app.domains.notifications.tasks.schedule_upcoming_session_notifications")
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.domains.notifications.tasks.schedule_upcoming_session_notifications"
+)
 def schedule_upcoming_session_notifications(hours_ahead: int = 24) -> int:
     return asyncio.run(
         _run_with_db(notification_service.schedule_upcoming_sessions(hours_ahead=hours_ahead))
     )
 
 
-@celery_app.task(name="app.domains.notifications.tasks.dispatch_due_notifications")
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.domains.notifications.tasks.dispatch_due_notifications"
+)
 def dispatch_due_notifications(batch_size: int = 200) -> int:
     return asyncio.run(_run_with_db(_dispatch_due_notifications(batch_size)))
 
@@ -64,7 +73,7 @@ async def _dispatch_due_notifications(batch_size: int) -> int:
     return total
 
 
-async def _dispatch_notifications(query, now, batch_size: int) -> int:
+async def _dispatch_notifications(query: Any, now: datetime, batch_size: int) -> int:
     items = await query.limit(batch_size)
     sent = 0
 

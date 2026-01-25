@@ -5,8 +5,9 @@ from tortoise import Tortoise
 
 from app.core.config import now_kst
 from app.core.tortoise_config import TORTOISE_ORM
-from app.domains.notifications.models import ConcertNoti, NotiStatus
+from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus
 from app.domains.notifications.service import notification_service
+from app.domains.streams.models import StreamStatus
 from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger("app.notifications")
@@ -39,14 +40,31 @@ def dispatch_due_notifications(batch_size: int = 200) -> int:
 
 async def _dispatch_due_notifications(batch_size: int) -> int:
     now = now_kst()
-    due = (
-        await ConcertNoti.filter(status=NotiStatus.PENDING, send_at__lte=now)
+    total = 0
+    due_query = (
+        ConcertNoti.filter(status=NotiStatus.PENDING, send_at__lte=now)
+        .exclude(kind=NotiKind.START)
         .order_by("send_at")
-        .limit(batch_size)
     )
+    total += await _dispatch_notifications(due_query, now, batch_size)
 
+    start_query = (
+        ConcertNoti.filter(
+            status=NotiStatus.PENDING,
+            kind=NotiKind.START,
+            session__status=StreamStatus.LIVE,
+        )
+        .order_by("send_at")
+    )
+    total += await _dispatch_notifications(start_query, now, batch_size)
+
+    return total
+
+async def _dispatch_notifications(query, now, batch_size: int) -> int:
+    items = await query.limit(batch_size)
     sent = 0
-    for noti in due:
+
+    for noti in items:
         claimed = await ConcertNoti.filter(
             id=noti.id, status=NotiStatus.PENDING
         ).update(status=NotiStatus.PROCESSING, updated_at=now)

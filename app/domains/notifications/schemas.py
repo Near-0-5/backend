@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -38,3 +39,8 @@ class NotificationItem(BaseModel):
 class NotificationListResponse(BaseModel):
     total: int
     items: list[NotificationItem]
+
+
+class NotificationEvent(BaseModel):
+    type: Literal["notification"] = "notification"
+    notification: NotificationItem

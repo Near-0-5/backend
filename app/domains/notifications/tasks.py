@@ -42,7 +42,11 @@ async def _dispatch_due_notifications(batch_size: int) -> int:
     now = now_kst()
     total = 0
     due_query = (
-        ConcertNoti.filter(status=NotiStatus.PENDING, send_at__lte=now)
+        ConcertNoti.filter(
+            status=NotiStatus.PENDING,
+            send_at__lte=now,
+            session__status=StreamStatus.READY,
+        )
         .exclude(kind=NotiKind.START)
         .order_by("send_at")
     )

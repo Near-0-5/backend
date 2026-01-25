@@ -1,18 +1,60 @@
-"""notifications 도메인 HTTP 라우터.
+from fastapi import APIRouter, Depends, Query, WebSocket, status
 
-여기에 넣을 것:
-- APIRouter(prefix='...', tags=[...])
-- endpoints 정의(GET/POST/PATCH/DELETE)
-- Depends로 인증/권한 체크
-- service 함수를 호출해서 결과 반환
-
-예:
-- GET /notifications
-- POST /notifications
-"""
-
-from fastapi import APIRouter
+from app.api.deps import get_current_user, get_current_user_from_refresh_cookie_ws
+from app.domains.notifications.models import NotiStatus
+from app.domains.notifications.schemas import (
+    NotificationListResponse,
+    NotificationSettingsResponse,
+    NotificationSettingsUpdate,
+)
+from app.domains.notifications.service import notification_service
+from app.domains.users.models import User
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-# TODO: endpoints 추가
+
+@router.get("", response_model=NotificationListResponse, status_code=status.HTTP_200_OK)
+async def list_notifications(
+    current_user: User = Depends(get_current_user),
+    status_filter: NotiStatus | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> NotificationListResponse:
+    items, total = await notification_service.list_user_notifications(
+        current_user.id,
+        status=status_filter,
+        limit=limit,
+        offset=offset,
+    )
+    return NotificationListResponse(total=total, items=items)
+
+
+@router.get(
+    "/settings",
+    response_model=NotificationSettingsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_settings(
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    return await notification_service.get_user_settings(current_user.id)
+
+
+@router.patch(
+    "/settings",
+    response_model=NotificationSettingsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_settings(
+    data: NotificationSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    return await notification_service.update_user_settings(current_user.id, data)
+
+
+@router.websocket("/ws")
+async def notifications_ws(
+    ws: WebSocket,
+    user: User = Depends(get_current_user_from_refresh_cookie_ws),
+) -> None:
+    await notification_service.handle_ws_connection(ws, user_id=user.id)

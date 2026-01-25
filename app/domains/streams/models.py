@@ -106,6 +106,8 @@ class ConcertSession(models.Model):
         "models.Artist",
         through="concert_artists",
         related_name="sessions",
+        forward_key="artist_id",
+        backward_key="session_id",
         description="이 공연에 참여하는 모든 출연진 목록",
     )
 

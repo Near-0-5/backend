@@ -64,8 +64,10 @@ async def refresh_stream_session(
 async def list_sessions(
     status: StreamStatus | None = None,
     category: CategoryType | None = None,
-    artist_name: str | None = None,
-    title: str | None = None,
+    artist_name: Annotated[
+        str | None, Query(description="검색: 출연진 이름 (부분 검색 가능)")
+    ] = None,
+    title: Annotated[str | None, Query(description="검색: 공연 이름 (부분 검색 가능)")] = None,
     from_date: Annotated[
         date | None, Query(description="시작 날짜가 해당 날짜 이후 (YYYY-MM-DD)")
     ] = None,

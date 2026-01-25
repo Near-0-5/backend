@@ -1,5 +1,5 @@
-from typing import TYPE_CHECKING
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from tortoise import fields, models
 
@@ -47,7 +47,7 @@ class ConcertNoti(models.Model):
         "models.ConcertSession", related_name="scheduled_notis"
     )
 
-    kind = fields.CharEnumField(NotiKind)
+    kind = fields.CharEnumField(NotiKind, index=True)
 
     title = fields.CharField(max_length=100)
     message = fields.TextField()

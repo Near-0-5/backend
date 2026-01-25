@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.models import (
@@ -105,3 +106,82 @@ class TestStreamService:
 
         today = date.today()
         assert len((await service.list_sessions(from_date=today, to_date=today))[0]) == 1
+
+    async def test_get_sessions_detail_service(self, service):
+        """Service.get_sessions_detail 검증"""
+        concert = await Concert.create(title="Detail Service", category=CategoryType.KPOP)
+        session = await ConcertSession.create(
+            concert=concert,
+            session_name="S Detail",
+            status=StreamStatus.LIVE,
+            start_at=datetime.now(),
+            end_at=datetime.now() + timedelta(hours=1),
+        )
+
+        # 아티스트 생성
+        from app.domains.artists.models import Artist
+        from app.domains.streams.models import ConcertArtist
+
+        artist = await Artist.create(
+            stage_name="ArtistService",
+            group_type="SOLO",
+            profile_img_url="https://a.png",
+            agency="AgencyS",
+        )
+        await ConcertArtist.create(session=session, artist=artist, is_main=True)
+
+        user = MagicMock(id=1)
+        with patch(
+            "app.domains.streams.permissions.StreamPermission.verify_playback_access",
+            new_callable=AsyncMock,
+        ):
+            res = await service.get_sessions_detail(user, session.id)
+            assert res.concert_title == "Detail Service"
+            assert len(res.lineup) == 1
+            assert res.lineup[0].name == "ArtistService"
+
+    async def test_get_viewing_credentials_not_found(self, service):
+        """세션 없음 -> 404"""
+        user = MagicMock(id=1)
+        with pytest.raises(HTTPException) as exc:
+            await service.get_viewing_credentials(9999, user)
+        assert exc.value.status_code == 404
+
+    async def test_refresh_viewing_session_invalid_token(self, service, mock_pb):
+        """잘못된 refresh_token -> 401"""
+        concert = await Concert.create(title="Refresh Invalid")
+        session = await ConcertSession.create(
+            concert=concert,
+            session_name="S1",
+            status=StreamStatus.LIVE,
+            start_at=datetime.now(),
+            end_at=datetime.now() + timedelta(hours=1),
+        )
+        await StreamChannel.create(
+            id=session.id,
+            session=session,
+            playback_url="https://test.com",
+            channel_arn="arn:ivs:test2",
+            ingest_endpoint="https://ingest2.com",
+            stream_key_encrypted="key",
+            is_private=True,
+        )
+
+        user = MagicMock(id=1)
+        # rotate_tokens에서 Exception 발생시키기
+        mock_pb.rotate_tokens.side_effect = Exception("Invalid")
+        service.playback_provider = mock_pb
+
+        with patch(
+            "app.domains.streams.permissions.StreamPermission.verify_playback_access",
+            new_callable=AsyncMock,
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await service.refresh_viewing_session(session.id, user, "bad_rt")
+            assert exc.value.status_code == 401
+
+    async def test_get_sessions_detail_not_found(self, service):
+        user = MagicMock(id=1)
+        with pytest.raises(HTTPException) as exc:
+            await service.get_sessions_detail(user, 99999)  # 존재하지 않는 세션
+        assert exc.value.status_code == 404

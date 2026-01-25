@@ -2,9 +2,14 @@ from collections.abc import Sequence
 from datetime import date, datetime, time
 from typing import Any
 
+from fastapi.exceptions import HTTPException
 from tortoise.expressions import Q
 
 from app.core.pagination import paginate_cursor
+from app.domains.streams.client.schemas import (
+    ArtistItem,
+    SessionDetailResponse,
+)
 from app.domains.streams.models import CategoryType, ConcertSession, StreamChannel, StreamStatus
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
@@ -20,8 +25,10 @@ class StreamUserService:
         """
         [User] 시청 권한 확인 및 최초 재생/채팅 토큰 발급
         """
-        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
 
+        if not session:
+            raise HTTPException(404, "콘서트 세션 정보를 찾을 수 없습니다.")
         # 유저 권한 증명
         await StreamPermission.verify_playback_access(user, session)
 
@@ -54,13 +61,18 @@ class StreamUserService:
         [User] 시청 중인 세션 연장 (아마존 권장: 연장 시마다 권한 재검증)
         """
         # 대상 세션, 채널 조회
-        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
 
-        # 갱신 시점에 다시 권한 체크
-        await StreamPermission.verify_playback_access(user, session)
+        if not session:
+            raise HTTPException(404, "콘서트 세션 정보를 찾을 수 없습니다.")
 
-        # 기존 리프레시 토큰으로 새 토큰 Access/Refresh 발급
-        new_tokens = self.playback_provider.rotate_tokens(refresh_token)
+        try:
+            # 갱신 시점에 다시 권한 체크
+            await StreamPermission.verify_playback_access(user, session)
+            # 기존 리프레시 토큰으로 새 토큰 Access/Refresh 발급
+            new_tokens = self.playback_provider.rotate_tokens(refresh_token)
+        except Exception:
+            raise HTTPException(401, "유효하지 않거나 만료된 리프레시 토큰입니다.") from None
 
         # IVS 재생 토큰 새 유효기간으로 재서명
         channel: StreamChannel = session.stream_channel
@@ -133,4 +145,39 @@ class StreamUserService:
             cursor=cursor,
             limit=limit,
             order_by=order,
+        )
+
+    async def get_sessions_detail(self, user: User, session_id: int) -> SessionDetailResponse:
+        session = await ConcertSession.get_or_none(id=session_id).prefetch_related(
+            "concert", "artist_mappings__artist"
+        )
+
+        if not session:
+            raise HTTPException(404, "공연 정보를 찾을 수 없습니다.")
+
+        await StreamPermission.verify_playback_access(user, session)
+
+        lineup_items = [
+            ArtistItem(
+                id=m.artist.id,
+                name=m.artist.stage_name,
+                type=m.artist.group_type,
+                profile_img_url=m.artist.profile_img_url,
+                agency=m.artist.agency,
+                is_main=m.is_main,
+            )
+            for m in session.artist_mappings
+        ]
+
+        return SessionDetailResponse(
+            id=session.id,
+            concert_title=session.concert.title,
+            session_name=session.session_name,
+            thumbnail_url=session.concert.thumbnail_url,
+            category=session.concert.category,
+            status=session.status,
+            description=session.concert.description,
+            lineup=lineup_items,
+            start_at=session.start_at,
+            end_at=session.end_at,
         )

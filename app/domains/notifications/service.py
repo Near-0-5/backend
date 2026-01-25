@@ -1,10 +1,210 @@
-"""notifications 도메인 서비스(비즈니스 로직).
+from __future__ import annotations
 
-여기에 넣을 것:
-- router에서 호출할 함수들
-  - create_*, update_*, delete_*, list_*, get_*
-- DB 접근(Tortoise 쿼리) + 검증/권한체크 + 외부연동 호출(integrations)
+import logging
+from datetime import datetime, timedelta
 
-규칙:
-- router.py에는 로직을 최소화하고, 실제 처리는 service로 내려보내기.
-"""
+from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
+
+from app.core.config import KST, now_kst
+from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
+from app.domains.notifications.schemas import NotificationSettingsUpdate
+from app.domains.streams.models import ConcertSession, StreamStatus
+from app.domains.users.models import User
+
+logger = logging.getLogger("app.notifications")
+
+_SCHEDULE_OFFSETS = {
+    NotiKind.HOUR_1: timedelta(hours=1),
+    NotiKind.MIN_30: timedelta(minutes=30),
+    NotiKind.START: timedelta(),
+}
+
+
+def _build_schedule(start_at: datetime) -> dict[NotiKind, datetime]:
+    # 시작시간에 따른 발송시간 계산
+    return {kind: start_at - offset for kind, offset in _SCHEDULE_OFFSETS.items()}
+
+
+def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
+    # 세션과 라이브 시작까지 남은 시간에 따른 알림 내용 생성
+    start_at = session.start_at
+    if start_at.tzinfo is None:
+        start_at = start_at.replace(tzinfo=KST)
+    else:
+        start_at = start_at.astimezone(KST)
+    start_str = start_at.strftime("%Y-%m-%d %H:%M")
+
+    if kind == NotiKind.HOUR_1:
+        prefix = "라이브 시작 1시간 전"
+    elif kind == NotiKind.MIN_30:
+        prefix = "라이브 시작 30분 전"
+    else:
+        prefix = "라이브 시작"
+
+    title = f"{session.concert.title} 라이브 알림"
+    message = f"{prefix}: {session.session_name} ({start_str})"
+    return title, message
+
+
+class NotificationService:
+    async def get_user_settings(self, user_id: int) -> UserNoti:
+        # 유저 알림 설정 정보 조회 및 생성
+        noti = await UserNoti.get_or_none(user_id=user_id)
+        if noti:
+            return noti
+        return await UserNoti.create(user_id=user_id)
+
+    async def update_user_settings(
+        self, user_id: int, data: NotificationSettingsUpdate
+    ) -> UserNoti:
+        # 유저 정보 수정(없으면 생성 후 수정)
+        #! 왜 메모리에 노티도 동일하게 반영함?
+        noti = await self.get_user_settings(user_id)
+        payload = data.model_dump(exclude_unset=True)
+        if payload:
+            now = now_kst()
+            await UserNoti.filter(user_id=user_id).update(**payload, updated_at=now)
+            for key, value in payload.items():
+                setattr(noti, key, value)
+            noti.updated_at = now
+        return noti
+
+    async def list_user_notifications(
+        self,
+        user_id: int,
+        *,
+        status: NotiStatus | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[ConcertNoti], int]:
+        # 유저 알림 목록 조회
+        #! 이미 읽은 목록은 조회에서 제외해야함.(컬럼을 따로 만들어야하나?)
+        query = ConcertNoti.filter(user_id=user_id)
+        if status:
+            query = query.filter(status=status)
+        total = await query.count()
+        items = await query.order_by("-send_at").offset(offset).limit(limit)
+        return list(items), total
+
+    async def schedule_session_notifications(
+        self, session_id: int, *, session: ConcertSession | None = None
+    ) -> int:
+        """세션 알림 스케줄 생성하고 알림 수 반환함."""
+        if session is None:
+            session = await ConcertSession.get(id=session_id)
+        await session.fetch_related("concert", "lineup")
+
+        if session.status == StreamStatus.ENDED:
+            return 0
+
+        user_ids = await self._resolve_target_user_ids(session)
+        if not user_ids:
+            return 0
+
+        schedule_map = _build_schedule(session.start_at)
+        total_created = 0
+
+        # 해당 세션에서 kind를 받은 놈은 주면 안 됨
+        for kind, send_at in schedule_map.items():
+            existing_ids = await ConcertNoti.filter(
+                session_id=session.id, kind=kind, user_id__in=user_ids
+            ).values_list("user_id", flat=True)
+            missing_ids = sorted(set(user_ids) - set(existing_ids))
+            if not missing_ids:
+                continue
+
+            # 알림 객체 리스트 만들어서 한번에 집어넣음
+            title, message = _build_content(session, kind)
+            notis = [
+                ConcertNoti(
+                    user_id=user_id,
+                    session_id=session.id,
+                    kind=kind,
+                    title=title,
+                    message=message,
+                    send_at=send_at,
+                    status=NotiStatus.PENDING,
+                )
+                for user_id in missing_ids
+            ]
+
+            try:
+                await ConcertNoti.bulk_create(notis, batch_size=500)
+                total_created += len(notis)
+            except IntegrityError:
+                created = 0
+                for noti in notis:
+                    _, is_created = await ConcertNoti.get_or_create(
+                        user_id=noti.user_id,
+                        session_id=noti.session_id,
+                        kind=noti.kind,
+                        defaults={
+                            "title": noti.title,
+                            "message": noti.message,
+                            "send_at": noti.send_at,
+                            "status": noti.status,
+                        },
+                    )
+                    if is_created:
+                        created += 1
+                total_created += created
+
+        return total_created
+
+    async def schedule_upcoming_sessions(self, hours_ahead: int = 24) -> int:
+        """지금부터 N(24시간 기본)시간 이내 시작하는 세션들 전부 스케줄 생성해줌"""
+        now = now_kst()
+        until = now + timedelta(hours=hours_ahead)
+
+        sessions = await ConcertSession.filter(
+            start_at__gte=now,
+            start_at__lte=until,
+        ).exclude(status=StreamStatus.ENDED).prefetch_related("concert", "lineup")
+
+        total = 0
+        for session in sessions:
+            total += await self.schedule_session_notifications(session.id, session=session)
+        return total
+
+    async def deliver_concert_notification(self, noti: ConcertNoti) -> bool:
+        """
+        실제로 메시지를 전송 할 함수. 지금은 로그로 찍기만 하고있음...
+        웹소켓으로 할 지 SSE로 할지 결정하고 작성
+        """
+        logger.info(
+            "Delivering notification id=%s user_id=%s session_id=%s kind=%s",
+            noti.id,
+            noti.user_id,
+            noti.session_id,
+            noti.kind,
+        )
+        return True
+
+    async def _resolve_target_user_ids(self, session: ConcertSession) -> list[int]:
+        """해당 세션 알림을 받을 유저들을 찾아서 id 리스트로 주는 함수임"""
+        lineup = await session.lineup.all()
+        artist_ids = [artist.id for artist in lineup]
+        filters: list[Q] = []
+
+        if artist_ids:
+            filters.append(
+                Q(noti_setting__artist_noti=True, followed_artists__id__in=artist_ids)
+            )
+
+        filters.append(Q(fav_categories__category=session.concert.category))
+
+        combined = filters[0]
+        for clause in filters[1:]:
+            combined |= clause
+
+        users = (
+            await User.filter(noti_setting__live_noti=True)
+            .filter(combined)
+            .distinct()
+            .values_list("id", flat=True)
+        )
+        return list(users)
+
+
+notification_service = NotificationService()

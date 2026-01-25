@@ -30,7 +30,8 @@ async def initialize_tests():
     """
     # 1. DB 초기화 (initializer 대신 Tortoise.init 사용으로 확실하게 연결)
     await Tortoise.init(
-        db_url="sqlite://:memory:", modules={"models": _CONFIG["apps"]["models"]["models"]}
+        db_url="sqlite://:memory:",
+        modules={"models": _CONFIG["apps"]["models"]["models"] + ["tests.core.test_pagination"]},
     )
 
     # 2. 스키마 생성

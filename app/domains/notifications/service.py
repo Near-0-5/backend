@@ -24,20 +24,30 @@ _SCHEDULE_OFFSETS = {
 }
 
 
-def _build_schedule(start_at: datetime) -> dict[NotiKind, datetime]:
-    return {kind: start_at - offset for kind, offset in _SCHEDULE_OFFSETS.items()}
-
-
-def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
-    start_at = session.start_at
-    start_at = (
+def _normalize_start_at(start_at: datetime) -> datetime:
+    return (
         start_at.replace(tzinfo=KST)
         if start_at.tzinfo is None
         else start_at.astimezone(KST)
     )
+
+
+def _build_schedule(start_at: datetime) -> dict[NotiKind, datetime]:
+    start_at = _normalize_start_at(start_at)
+    schedule = {kind: start_at - offset for kind, offset in _SCHEDULE_OFFSETS.items()}
+    schedule[NotiKind.DAY_BEFORE] = (start_at - timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return schedule
+
+
+def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
+    start_at = _normalize_start_at(session.start_at)
     start_str = start_at.strftime("%Y-%m-%d %H:%M")
 
-    if kind == NotiKind.HOUR_1:
+    if kind == NotiKind.DAY_BEFORE:
+        prefix = "내일 라이브 시작 예정"
+    elif kind == NotiKind.HOUR_1:
         prefix = "라이브 시작 1시간 전"
     elif kind == NotiKind.MIN_30:
         prefix = "라이브 시작 30분 전"

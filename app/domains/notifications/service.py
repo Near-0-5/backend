@@ -8,12 +8,8 @@ from tortoise.expressions import Q
 
 from app.core.config import KST, now_kst
 from app.domains.notifications.manager import notification_manager
-from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
-from app.domains.notifications.schemas import (
-    NotificationEvent,
-    NotificationItem,
-    NotificationSettingsUpdate,
-)
+from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus
+from app.domains.notifications.schemas import NotificationEvent, NotificationItem
 from app.domains.streams.models import ConcertSession, StreamStatus
 from app.domains.users.models import User
 
@@ -60,40 +56,6 @@ def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
 
 
 class NotificationService:
-    async def get_user_settings(self, user_id: int) -> UserNoti:
-        noti = await UserNoti.get_or_none(user_id=user_id)
-        if noti:
-            return noti
-        return await UserNoti.create(user_id=user_id)
-
-    async def update_user_settings(
-        self, user_id: int, data: NotificationSettingsUpdate
-    ) -> UserNoti:
-        noti = await self.get_user_settings(user_id)
-        payload = data.model_dump(exclude_unset=True)
-        if payload:
-            now = now_kst()
-            await UserNoti.filter(user_id=user_id).update(**payload, updated_at=now)
-            for key, value in payload.items():
-                setattr(noti, key, value)
-            noti.updated_at = now
-        return noti
-
-    async def list_user_notifications(
-        self,
-        user_id: int,
-        *,
-        status: NotiStatus | None,
-        limit: int,
-        offset: int,
-    ) -> tuple[list[ConcertNoti], int]:
-        query = ConcertNoti.filter(user_id=user_id)
-        if status:
-            query = query.filter(status=status)
-        total = await query.count()
-        items = await query.order_by("-send_at").offset(offset).limit(limit)
-        return list(items), total
-
     async def schedule_session_notifications(
         self, session_id: int, *, session: ConcertSession | None = None
     ) -> int:

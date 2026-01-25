@@ -5,22 +5,6 @@ from pydantic import BaseModel, ConfigDict
 
 from app.domains.notifications.models import NotiKind, NotiStatus
 
-
-class NotificationSettingsUpdate(BaseModel):
-    artist_noti: bool | None = None
-    live_noti: bool | None = None
-    marketing_noti: bool | None = None
-
-
-class NotificationSettingsResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    artist_noti: bool
-    live_noti: bool
-    marketing_noti: bool
-    updated_at: datetime
-
-
 class NotificationItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,11 +18,6 @@ class NotificationItem(BaseModel):
     sent_at: datetime | None
     created_at: datetime
     updated_at: datetime
-
-
-class NotificationListResponse(BaseModel):
-    total: int
-    items: list[NotificationItem]
 
 
 class NotificationEvent(BaseModel):

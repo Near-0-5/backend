@@ -1,9 +1,11 @@
+from collections.abc import Sequence
+from datetime import date, datetime, time
 from typing import Any
 
-from app.domains.streams.models import (
-    ConcertSession,
-    StreamChannel,
-)
+from tortoise.expressions import Q
+
+from app.core.pagination import paginate_cursor
+from app.domains.streams.models import CategoryType, ConcertSession, StreamChannel, StreamStatus
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
 from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider
@@ -75,3 +77,60 @@ class StreamUserService:
             "access_token": new_tokens["access_token"],
             "refresh_token": new_tokens["refresh_token"],
         }
+
+    async def list_sessions(
+        self,
+        status: StreamStatus | None = None,
+        category: CategoryType | None = None,
+        artist_name: str | None = None,
+        title: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        order_by: str = "latest",
+        cursor: int | None = None,
+        limit: int = 10,
+    ) -> tuple[Sequence[ConcertSession], int | None]:
+        """
+        [User] 스트리밍 목록 조회 (커서 페이징)
+        - 상태, 카테고리(장르) 필터
+        - 제목 or 아티스트 검색
+        - 날짜 범위 필터
+        - 정렬 (latest / oldest)
+        """
+        # 필터링
+        filters = Q()
+        if status:  # 상태별
+            filters &= Q(status=status)
+        if category:  # 장르별
+            filters &= Q(concert__category=category)
+
+        if artist_name:
+            artist_name = artist_name.strip()
+            filters &= Q(lineup__stage_name__icontains=artist_name)
+
+        if title:
+            title = title.strip()
+            filters &= Q(concert__title__icontains=title)
+
+        if from_date:
+            filters &= Q(start_at__gte=from_date)
+
+        if to_date:
+            to_datetime = datetime.combine(to_date, time.max)
+            filters &= Q(start_at__lte=to_datetime)
+
+        queryset = (
+            ConcertSession.filter(filters)
+            .prefetch_related("concert", "lineup", "stream_channel")
+            .distinct()
+        )
+
+        # 정렬
+        order = "id" if order_by == "oldest" else "-id"
+
+        return await paginate_cursor(
+            queryset=queryset,
+            cursor=cursor,
+            limit=limit,
+            order_by=order,
+        )

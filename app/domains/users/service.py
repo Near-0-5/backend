@@ -5,6 +5,7 @@ import httpx
 
 from app.core.config import settings
 from app.domains.users.models import User, UserCatFav, UserDeleteLog
+from app.domains.users.schemas import UserMeResponse
 
 if TYPE_CHECKING:
     # 런타임에는 필요 없지만 타입 힌트용으로만 쓰이는 임포트
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class UserService:
-    async def get_user_profile(self, user_id: int) -> dict[str, Any]:
+    async def get_user_profile(self, user_id: int) -> UserMeResponse:
         """
         사용자의 상세 프로필 정보를 조회합니다.
         (팔로우한 아티스트, 알림 설정, 선호 카테고리 포함)
@@ -22,33 +23,10 @@ class UserService:
         user = await User.get(id=user_id).prefetch_related(
             "followed_artists", "noti_setting", "fav_categories"
         )
-
         notis = user.noti_setting
-        fav_categories = cast("Iterable[UserCatFav]", user.fav_categories)
+        fav_categories = cast("list[UserCatFav]", user.fav_categories)
 
-        return {
-            "id": user.id,
-            "email": user.email,
-            "nickname": user.nickname,
-            "name": user.real_name,
-            "profile_image": user.profile_img_url,
-            "joined_at": user.created_at,
-            "bio": user.bio,
-            "favorite_artists": [
-                {
-                    "id": artist.id,
-                    "name": artist.stage_name,
-                    "profile_image": artist.profile_img_url,
-                }
-                for artist in user.followed_artists
-            ],
-            "preferred_categories": [cat.category.value for cat in fav_categories],
-            "notification_settings": {
-                "new_content_from_favorite_artists": notis.artist_noti if notis else True,
-                "live_start_notification": notis.live_noti if notis else True,
-                "marketing_consent": notis.marketing_noti if notis else False,
-            },
-        }
+        return UserMeResponse.from_orm_user_profile_custom(user=user, notis=notis, fav_cats=fav_categories)
 
     async def withdraw_kakao_user(
         self, user: User, reason: str = "사용자 요청에 의한 탈퇴"

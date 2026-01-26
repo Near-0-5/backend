@@ -1,6 +1,14 @@
-"""Celery Beat 스케줄(옵션).
+from celery.schedules import crontab
 
-여기에 넣을 것:
-- 주기적으로 실행할 작업들
-- 예: 라이브 시작 알림 예약 스캔, 만료된 토큰 정리 등
-"""
+beat_schedule = {
+    "schedule-upcoming-session-notifications": {
+        "task": "app.domains.notifications.tasks.schedule_upcoming_session_notifications",
+        "schedule": crontab(minute="*/10"),
+        "args": (24,),
+    },
+    "dispatch-due-notifications": {
+        "task": "app.domains.notifications.tasks.dispatch_due_notifications",
+        "schedule": crontab(minute="*"),
+        "args": (200,),
+    },
+}

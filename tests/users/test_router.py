@@ -37,7 +37,7 @@ async def test_user_router_coverage_full():
                 "nickname": test_user.nickname,
                 "name": "Test",
                 "profile_image": None,
-                "joined_at": "2024-01-01T00:00:00Z",
+                "created_at": "2024-01-01T00:00:00Z",
                 "bio": None,
                 "favorite_artists": [],
                 "preferred_categories": [],

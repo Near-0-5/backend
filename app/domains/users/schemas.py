@@ -1,9 +1,11 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
-from typing import Optional
-from app.domains.users.models import User, UserCatFav
+from fastapi import UploadFile
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.domains.notifications.models import UserNoti
+from app.domains.users.models import User, UserCatFav
+
 
 class ArtistSimple(BaseModel):
     id: int
@@ -35,7 +37,9 @@ class UserMeResponse(BaseModel):
     notification_settings: NotiSettings
 
     @classmethod
-    def from_orm_user_profile_custom(cls, user: User, notis: Optional[UserNoti], fav_cats: list[UserCatFav]):
+    def from_orm_user_profile_custom(
+        cls, user: User, notis: UserNoti | None, fav_cats: list[UserCatFav]
+    ):
         """모델 객체들을 받아 스키마 인스턴스로 변환하는 팩토리 메서드"""
         return cls(
             id=user.id,
@@ -54,5 +58,15 @@ class UserMeResponse(BaseModel):
                 new_content_from_favorite_artists=notis.artist_noti if notis else True,
                 live_start_notification=notis.live_noti if notis else True,
                 marketing_consent=notis.marketing_noti if notis else False,
-            )
+            ),
         )
+
+
+class UserMeUpdate(BaseModel):
+    nickname: str | None = Field(
+        None, min_length=2, max_length=20, pattern=r"^[a-zA-Z0-9_가-힣]+$"
+    )
+    notification_settings: NotiSettings | None = None
+    bio: str | None = Field(None, max_length=500)
+    profile_image: UploadFile | None = None
+    updated_at: datetime

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 class NotiKind(str, Enum):
+    DAY_BEFORE = "DAY_BEFORE"
     HOUR_1 = "HOUR_1"
     MIN_30 = "MIN_30"
     START = "START"
@@ -46,6 +47,10 @@ class ConcertNoti(models.Model):
     session: fields.ForeignKeyRelation["ConcertSession"] = fields.ForeignKeyField(
         "models.ConcertSession", related_name="scheduled_notis"
     )
+
+    if TYPE_CHECKING:
+        user_id: int
+        session_id: int
 
     kind = fields.CharEnumField(NotiKind, index=True)
 

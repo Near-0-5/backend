@@ -1,9 +1,26 @@
-"""notifications 도메인 Pydantic 스키마.
+from datetime import datetime
+from typing import Literal
 
-여기에 넣을 것:
-- Request/Response 모델들
-- 예: CreateRequest, UpdateRequest, ListResponse, DetailResponse
+from pydantic import BaseModel, ConfigDict
 
-팁:
-- 외부로 노출되는 응답 스키마는 항상 schemas에 모으는게 추적하기 쉬움.
-"""
+from app.domains.notifications.models import NotiKind, NotiStatus
+
+
+class NotificationItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    session_id: int
+    kind: NotiKind
+    title: str
+    message: str
+    send_at: datetime
+    status: NotiStatus
+    sent_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class NotificationEvent(BaseModel):
+    type: Literal["notification"] = "notification"
+    notification: NotificationItem

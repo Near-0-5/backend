@@ -1,18 +1,15 @@
-"""notifications 도메인 HTTP 라우터.
+from fastapi import APIRouter, Depends, WebSocket
 
-여기에 넣을 것:
-- APIRouter(prefix='...', tags=[...])
-- endpoints 정의(GET/POST/PATCH/DELETE)
-- Depends로 인증/권한 체크
-- service 함수를 호출해서 결과 반환
-
-예:
-- GET /notifications
-- POST /notifications
-"""
-
-from fastapi import APIRouter
+from app.api.deps import get_current_user_from_refresh_cookie_ws
+from app.domains.notifications.service import notification_service
+from app.domains.users.models import User
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-# TODO: endpoints 추가
+
+@router.websocket("/ws")
+async def notifications_ws(
+    ws: WebSocket,
+    user: User = Depends(get_current_user_from_refresh_cookie_ws),
+) -> None:
+    await notification_service.handle_ws_connection(ws, user_id=user.id)

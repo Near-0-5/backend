@@ -80,6 +80,7 @@ class TestStreamService:
             mock_session.access_level = AccessLevel.PUBLIC
             mock_session.start_at = now
             mock_sess_create.return_value = mock_session
+            mock_session.status = StreamStatus.READY
 
             mock_art_filter.return_value = [MagicMock(id=1)]
 

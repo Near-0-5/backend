@@ -3,7 +3,13 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-from app.domains.streams.models import AccessLevel, CategoryType, ChannelType, LatencyMode
+from app.domains.streams.models import (
+    AccessLevel,
+    CategoryType,
+    ChannelType,
+    LatencyMode,
+    StreamStatus,
+)
 
 # 모든 AWS 통신(In/Out)은 CamelCase, 서버 내부 로직은 snake_case
 COMMON_CONFIG = ConfigDict(
@@ -27,6 +33,12 @@ class StreamLiveMetrics(BaseModel):
     viewer_count: int = Field(..., description="현재 동시 시청자 수")
     start_time: datetime | None = Field(None, description="방송 시작 시각")
     state: str = Field(..., description="LIVE 상태")
+
+
+class IVSUpdateConfig(BaseModel):
+    model_config = COMMON_CONFIG
+    latency_mode: LatencyMode | None = None
+    channel_type: ChannelType | None = Field(None, alias="type")
 
 
 class StreamIngestInfo(BaseModel):
@@ -76,9 +88,20 @@ class SessionCreateRequest(BaseModel):
     channel_config: ChannelConfig = Field(default_factory=ChannelConfig)
 
 
+class SessionUpdateRequest(BaseModel):
+    """세션 수정 요청 스키마"""
+
+    model_config = COMMON_CONFIG
+    session_name: str | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    access_level: AccessLevel | None = None
+    is_test: bool | None = None
+    artist_ids: list[int] | None = None  # 라인업
+    channel_config: IVSUpdateConfig | None = None  # IVS  채널 수정
+
+
 # ==================== 응답 스키마 ====================
-
-
 class ConcertResponse(BaseModel):
     """콘서트 생성 응답"""
 
@@ -93,13 +116,15 @@ class ConcertResponse(BaseModel):
 
 
 class SessionResponse(BaseModel):
-    """세션 생성 응답"""
+    """세션 응답"""
 
     model_config = COMMON_CONFIG
     id: int = Field(..., description="내부 세션 ID")
     session_name: str
     access_level: AccessLevel
     start_at: datetime
+
+    status: StreamStatus
 
     # 인프라 정보는 별도 객체로 분리
     channel: IVSChannelSummary | None = None

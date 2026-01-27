@@ -5,7 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.domains.streams.deps import get_admin_user
-from app.domains.streams.models import AccessLevel, ChannelType, LatencyMode
+from app.domains.streams.models import AccessLevel, ChannelType, LatencyMode, StreamStatus
 from app.main import app
 
 
@@ -87,6 +87,7 @@ class TestStreamRouter:
                     session_name="Session 1",
                     access_level=AccessLevel.PUBLIC,
                     start_at=datetime.now(),
+                    status=StreamStatus.READY,
                     channel=IVSChannelSummary(
                         arn="arn:test",
                         ingest_endpoint="rtmps://test",

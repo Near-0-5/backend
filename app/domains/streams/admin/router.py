@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends, Path, Request, status
+from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -8,6 +8,7 @@ from app.domains.streams.admin.schemas import (
     ConcertResponse,
     SessionCreateRequest,
     SessionResponse,
+    SessionUpdateRequest,
     StreamIngestResponse,
 )
 from app.domains.streams.admin.service import StreamAdminService
@@ -15,7 +16,7 @@ from app.domains.streams.deps import get_admin_user
 from app.domains.streams.models import Concert
 from app.domains.users.models import User
 
-router = APIRouter(prefix="/admin/streams", tags=["[Admin] Streaming"])
+router = APIRouter(prefix="/admin/streams", tags=["[Admin] 스트리밍 관리"])
 templates = Jinja2Templates(directory="templates")
 
 
@@ -56,6 +57,57 @@ async def create_concert_stream(
     return await service.create_session_with_infrastructure(concert_id, data, current_admin)
 
 
+@router.get(
+    "/sessions",
+    response_model=list[SessionResponse],
+    summary="콘서트 세션 목록 조회",
+    description="모든 콘서트 세션을 조회합니다. \
+    AWS IVS의 현재 라이브 상태를 실시간으로 확인하여 목록에 반영합니다.",
+)
+async def list_concert_sessions(
+    response: Response,
+    cursor: int | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> list[SessionResponse]:
+    sessions, next_cursor = await service.list_sessions_admin(current_admin, limit, cursor)
+
+    if next_cursor is not None:
+        response.headers["X-Next-Cursor"] = str(next_cursor)
+
+    return sessions
+
+
+@router.get(
+    "/sessions/{session_id}",
+    response_model=SessionResponse,
+    summary="콘서트 세션 상세 조회",
+)
+async def get_concert_session_detail(
+    session_id: int = Path(..., description="조회할 세션 ID"),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> SessionResponse:
+    return await service.get_session_admin_detail(session_id, current_admin)
+
+
+@router.patch(
+    "/sessions/{session_id}",
+    response_model=SessionResponse,
+    summary="콘서트 세션 및 인프라 수정",
+    description="세션 정보와 IVS 설정을 부분 수정합니다. \
+        channel_config 전달 시 AWS 설정도 즉시 변경됩니다.",
+)
+async def update_concert_session(
+    session_id: int = Path(..., description="수정할 세션 ID"),
+    data: SessionUpdateRequest = Body(...),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> SessionResponse:
+    return await service.update_session_infrastructure(session_id, data, current_admin)
+
+
 @router.delete(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -74,7 +126,7 @@ async def delete_concert_session(
     "/sessions/{session_id}/rotate-key",
     summary="스트림 키 강제 재발급 (보안)",
     description="기존의 모든 스트림 키를 무효화(삭제)하고 새로운 키 생성 \
-                 스트림 키가 유출되었을 때 사용합니다.",
+                스트림 키가 유출되었을 때 사용합니다.",
 )
 async def rotate_session_stream_key(
     session_id: int = Path(..., description="키를 갱신할 세션 ID"),
@@ -99,6 +151,7 @@ async def stop_live_stream(
     return {"message": "방송이 종료 처리되었습니다."}
 
 
+# ================================= ivs 송출 테스트용 엔드포인트 =================================
 @router.get(
     "/sessions/{session_id}/ingest",
     response_model=StreamIngestResponse,

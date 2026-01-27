@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import cast
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect, status
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
@@ -91,6 +91,14 @@ class NotificationService:
         total = await query.count()
         items = await query.order_by("-send_at").offset(offset).limit(limit)
         return list(items), total
+
+    async def delete_user_notification(self, user_id: int, notification_id: int) -> None:
+        deleted = await ConcertNoti.filter(id=notification_id, user_id=user_id).delete()
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="알림을 찾을 수 없습니다.",
+            )
 
     async def schedule_session_notifications(
         self, session_id: int, *, session: ConcertSession | None = None

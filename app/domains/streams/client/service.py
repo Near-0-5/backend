@@ -42,21 +42,16 @@ class StreamUserService:
             )
             playback_url = f"{playback_url}?token={token}"
 
-        # 내부 세션 토큰
-        internal_tokens = self.playback_provider.sign_internal_tokens(
-            user_id=str(user.id), stream_id=str(channel.id)
-        )
-
         return {
             "playback_url": playback_url,
             "stream_id": channel.id,
-            "access_token": internal_tokens["access_token"],
-            "refresh_token": internal_tokens["refresh_token"],
         }
 
-    async def refresh_viewing_session(
-        self, session_id: int, user: User, refresh_token: str
-    ) -> dict[str, Any]:
+    async def refresh_playback_url(
+        self,
+        session_id: int,
+        user: User,
+    ) -> str:
         """
         [User] 시청 중인 세션 연장 (아마존 권장: 연장 시마다 권한 재검증)
         """
@@ -66,29 +61,23 @@ class StreamUserService:
         if not session:
             raise HTTPException(404, "콘서트 세션 정보를 찾을 수 없습니다.")
 
-        try:
-            # 갱신 시점에 다시 권한 체크
-            await StreamPermission.verify_playback_access(user, session)
-            # 기존 리프레시 토큰으로 새 토큰 Access/Refresh 발급
-            new_tokens = self.playback_provider.rotate_tokens(refresh_token)
-        except Exception:
-            raise HTTPException(401, "유효하지 않거나 만료된 리프레시 토큰입니다.") from None
+        # 갱신 시점에 다시 권한 체크
+        await StreamPermission.verify_playback_access(user, session)
+        channel = session.stream_channel
 
-        # IVS 재생 토큰 새 유효기간으로 재서명
-        channel: StreamChannel = session.stream_channel
-        playback_url: str = channel.playback_url
+        # 공개 채널이면 그냥 URL 반환
+        if not channel.is_private:
+            return channel.playback_url
 
-        if channel.is_private:
-            token = self.playback_provider.sign_playback_token(
-                channel_arn=channel.channel_arn, viewer_id=str(user.id)
-            )
-            playback_url = f"{playback_url}?token={token}"
+        # 비공개 채널이면 토큰 서명
+        new_token = self.playback_provider.sign_playback_token(
+            channel_arn=session.stream_channel.channel_arn,
+            viewer_id=str(user.id),
+            duration_sec=3600,  # 1시간 유효
+        )
+        refreshed_playback_url = f"{channel.playback_url}?token={new_token}"
 
-        return {
-            "playback_url": playback_url,
-            "access_token": new_tokens["access_token"],
-            "refresh_token": new_tokens["refresh_token"],
-        }
+        return refreshed_playback_url
 
     async def list_sessions(
         self,

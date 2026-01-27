@@ -85,3 +85,23 @@ class TestArtistService:
 
         assert response.total == 0
         assert len(response.items) == 0
+
+    async def test_get_artist_detail_success(self, initialize_tests):
+        """아티스트 상세 조회가 정상 작동하는지 테스트합니다."""
+        await Artist.create(
+            id=501, stage_name="Detail Artist", agency="Test Agency", description="Test Description"
+        )
+
+        response = await artist_service.get_artist_detail(artist_id=501)
+
+        assert response.id == 501
+        assert response.name == "Detail Artist"
+        assert response.company == "Test Agency"
+
+    async def test_get_artist_detail_not_found(self, initialize_tests):
+        """존재하지 않는 아티스트 조회 시 404 에러를 던지는지 테스트합니다."""
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc:
+            await artist_service.get_artist_detail(artist_id=999)
+        assert exc.value.status_code == 404

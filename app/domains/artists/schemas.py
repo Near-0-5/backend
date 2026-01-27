@@ -1,4 +1,8 @@
+from datetime import date
+
 from pydantic import BaseModel, HttpUrl
+
+from app.domains.artists.models import GroupType
 
 
 class ArtistListElement(BaseModel):
@@ -15,3 +19,16 @@ class ArtistListResponse(BaseModel):
     page: int
     page_size: int
     items: list[ArtistListElement]
+
+
+class ArtistDetailResponse(BaseModel):
+    id: int
+    name: str
+    profile_image: HttpUrl | str | None
+    company: str | None
+    description: str | None
+    category: str | None
+    debut_date: date | None
+    member_count: int | None
+    group_type: GroupType | None
+    follower_count: int

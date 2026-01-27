@@ -29,6 +29,18 @@ async def list_notifications(
     return NotificationListResponse(total=total, items=items)
 
 
+@router.delete(
+    "/{notification_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_notification(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await notification_service.delete_user_notification(current_user.id, notification_id)
+    return None
+
+
 @router.get(
     "/settings",
     response_model=NotificationSettingsResponse,

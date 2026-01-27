@@ -13,6 +13,7 @@ from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, 
 from app.domains.notifications.schemas import (
     NotificationEvent,
     NotificationItem,
+    NotificationSettingsUpdate
 )
 from app.domains.streams.models import ConcertSession, StreamStatus
 from app.domains.users.models import User
@@ -62,6 +63,19 @@ class NotificationService:
             return noti
         except IntegrityError:
             return await UserNoti.get(user_id=user_id)
+
+    async def update_user_settings(
+        self, user_id: int, data: NotificationSettingsUpdate
+    ) -> UserNoti:
+        noti = await self.get_user_settings(user_id)
+        payload = data.model_dump(exclude_unset=True, exclude_none=True)
+        if payload:
+            now = now_kst()
+            await UserNoti.filter(user_id=user_id).update(**payload, updated_at=now)
+            for key, value in payload.items():
+                setattr(noti, key, value)
+            noti.updated_at = now
+        return noti
 
     async def list_user_notifications(
         self,

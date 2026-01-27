@@ -8,6 +8,7 @@ from app.domains.users.models import User
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
+
 @router.get("", response_model=NotificationListResponse, status_code=status.HTTP_200_OK)
 async def list_notifications(
     current_user: User = Depends(get_current_user),
@@ -22,6 +23,7 @@ async def list_notifications(
         offset=offset,
     )
     return NotificationListResponse(total=total, items=items)
+
 
 @router.websocket("/ws")
 async def notifications_ws(

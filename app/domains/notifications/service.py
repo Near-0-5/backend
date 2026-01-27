@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-
 from typing import cast
+
 from fastapi import WebSocket, WebSocketDisconnect
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from app.core.config import KST, now_kst
 from app.domains.notifications.manager import notification_manager
-from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
+from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus
 from app.domains.notifications.schemas import (
     NotificationEvent,
     NotificationItem,

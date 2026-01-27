@@ -28,7 +28,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 )
 async def get_my_profile(
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict[str, Any]:
+) -> UserMeResponse:
     """내 프로필 정보를 반환합니다."""
     return await user_service.get_user_profile(current_user.id)
 
@@ -51,7 +51,7 @@ async def update_my_profile(
 @router.post("/me/image", summary="프로필 이미지 업로드")
 async def upload_my_profile_image(
     current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
-):
+) -> UserMeResponse:
     return await user_service.update_profile_image(current_user, file)
 
 

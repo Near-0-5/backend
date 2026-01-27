@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import aioboto3
 from botocore.exceptions import ClientError
@@ -122,7 +122,7 @@ class S3Client:
                     },
                     ExpiresIn=expires_in,
                 )
-            return url
+            return cast("str", url)
         except ClientError as e:
             logger.error(f"S3 Presigned URL Generation Failed: {e}", exc_info=True)
             return str(e)

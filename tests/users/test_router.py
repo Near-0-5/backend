@@ -35,8 +35,8 @@ async def test_user_router_coverage_full():
                 "id": test_user.id,
                 "email": test_user.email,
                 "nickname": test_user.nickname,
-                "name": "Test",
-                "profile_image": None,
+                "real_name": "Test User",
+                "profile_img_url": "http://image.com",
                 "created_at": "2024-01-01T00:00:00Z",
                 "bio": None,
                 "favorite_artists": [],
@@ -79,6 +79,26 @@ async def test_user_router_coverage_full():
                 else:
                     # 헤더가 비어있어도 mock이 호출되었다면 로직은 실행된 것이므로 성공으로 간주
                     pass
+
+            # PATCH /me (프로필 수정) 테스트 추가
+            with patch(
+                "app.domains.users.router.user_service.update_user_profile", new_callable=AsyncMock
+            ) as mock_patch:
+                mock_patch.return_value = mock_profile
+                # ✅ 수정: updated_at 필드 추가 (스키마 정의에 따라 필수일 경우)
+                # 만약 스키마에서 Optional이라면, 다른 필수 필드가 누락되었는지 확인이 필요합니다.
+                payload = {"nickname": "new_nick", "updated_at": "2024-01-01T00:00:00Z"}
+                response_patch = await ac.patch("/api/v1/users/me", json=payload)
+                assert response_patch.status_code == 200
+
+            # POST /me/image (이미지 업로드) 테스트 추가
+            with patch(
+                "app.domains.users.router.user_service.update_profile_image", new_callable=AsyncMock
+            ) as mock_img:
+                mock_img.return_value = mock_profile
+                files = {"file": ("test.png", b"fake_data", "image/png")}
+                response_img = await ac.post("/api/v1/users/me/image", files=files)
+                assert response_img.status_code == 200
 
     finally:
         # 테스트 종료 후 반드시 초기화. 다른 테스트에 영향감.

@@ -172,13 +172,26 @@ async def test_kakao_callback_endpoint(mocker):
         access_token="fake_jwt", refresh_token="fake_refresh", token_type="bearer", is_new_user=True
     )
 
-    from httpx import ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/api/v1/auth/kakao/callback?code=test_code")
+        # follow_redirects=False로 설정하여 리다이렉트 응답 가로채 응답(307)을 직접 검증.
+        response = await ac.get(
+            "/api/v1/auth/kakao/callback?code=test_code", follow_redirects=False
+        )
 
-    assert response.status_code == 200
-    assert response.json()["access_token"] == "fake_jwt"
+    # 기존 200에서 302 Or 307 로 변경
+    assert response.status_code in [302, 307]
+
+    # 리다이렉트 위치 및 데이터 검증
+    location = response.headers["location"]
+    assert "access_token=fake_jwt" in location
+    assert "is_new_user=true" in location
+
+    # 쿠키가 정상적으로 설정되었는지 확인
+    set_cookies = response.headers.get_list("set-cookie")
+    assert any("refresh_token=fake_refresh" in c for c in set_cookies)
+
     mock_service.assert_called_once_with("test_code")
 
 

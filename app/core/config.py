@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     KAKAO_CLIENT_SECRET: str
     KAKAO_ADMIN_KEY: str
 
+    CALLBACK_REDIRECT_URL: str
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def DATABASE_URL(self) -> str:

@@ -61,16 +61,25 @@ async def kakao_login() -> RedirectResponse:
     return RedirectResponse(kakao_auth_url)
 
 
-@router.get("/kakao/callback", response_model=TokenResponse, include_in_schema=False)
-async def kakao_callback(response: Response, code: str = Query(...)) -> TokenResponse:
+@router.get("/kakao/callback", include_in_schema=False)
+async def kakao_callback(response: Response, code: str = Query(...)) -> RedirectResponse:
     """
     카카오 인증 서버로부터 리다이렉트되어 인가 코드를 받습니다.
+    settings.CALLBACK_REDIRECT_URL 리다이렉트합니다.
     사용자가 직접 호출할 필요가 없으므로 API 문서에서 제외합니다.
     """
     token_data = await auth_service.process_kakao_login(code)
 
+    # 화면으로 보낼 redirect url 구성 및 응답할 RedirectResponse 설정
+    redirect_url = (
+        f"{settings.CALLBACK_REDIRECT_URL}"
+        f"?access_token={token_data.access_token}"
+        f"&is_new_user={str(token_data.is_new_user).lower()}"
+    )
+    redirect_response = RedirectResponse(url=redirect_url)
+
     # Refresh Token을 HttpOnly 쿠키에 설정
-    response.set_cookie(
+    redirect_response.set_cookie(
         key="refresh_token",
         value=token_data.refresh_token,
         httponly=True,
@@ -80,11 +89,7 @@ async def kakao_callback(response: Response, code: str = Query(...)) -> TokenRes
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
     )
 
-    return TokenResponse(
-        access_token=token_data.access_token,
-        refresh_token=token_data.refresh_token,
-        is_new_user=token_data.is_new_user,
-    )
+    return redirect_response
 
 
 @router.post("/logout", summary="로그아웃", status_code=status.HTTP_204_NO_CONTENT)

@@ -13,7 +13,7 @@ from app.domains.users.schemas import UserMeResponse, UserMeUpdate
 
 
 class UserService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.image_resizer = ImageResizer()
 
     async def get_user_profile(self, user_id: int) -> UserMeResponse:
@@ -73,7 +73,7 @@ class UserService:
             # 관계 데이터 반영을 위해 다시 로드
             return await self.get_user_profile(user.id)
 
-    async def update_profile_image(self, user: User, file: UploadFile) -> User:
+    async def update_profile_image(self, user: User, file: UploadFile) -> UserMeResponse:
         """
         프로필 이미지만을 업데이트한다.
 
@@ -83,7 +83,8 @@ class UserService:
         """
         user = await self._update_profile(user, file)
         await user.save()
-        return user
+
+        return await self.get_user_profile(user.id)
 
     async def _update_profile(self, user: User, file: UploadFile) -> User:
         """
@@ -107,7 +108,8 @@ class UserService:
         )
 
         # DB 업데이트 (예: 중간 사이즈인 300px을 기본 URL로 저장)
-        user.profile_img_url = urls.get("300")
+        img_url = urls.get("300")
+        user.profile_img_url = img_url if img_url else ""
 
         return user
 
@@ -138,4 +140,4 @@ class UserService:
         await user.delete()
 
 
-user_service = UserService()
+user_service: UserService = UserService()

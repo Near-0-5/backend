@@ -40,7 +40,7 @@ class User(models.Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
-    # 아티스트 팔로우 (M2M)  수정예정
+    # 아티스트 팔로우 (M2M)
     followed_artists: fields.ManyToManyRelation["Artist"] = fields.ManyToManyField(
         "models.Artist",
         through="follows",

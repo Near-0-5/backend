@@ -6,6 +6,12 @@ from pydantic import BaseModel, ConfigDict
 from app.domains.notifications.models import NotiKind, NotiStatus
 
 
+class NotificationSettingsUpdate(BaseModel):
+    artist_noti: bool | None = None
+    live_noti: bool | None = None
+    marketing_noti: bool | None = None
+
+
 class NotificationSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

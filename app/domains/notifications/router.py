@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, Query, WebSocket, status
 
 from app.api.deps import get_current_user, get_current_user_from_refresh_cookie_ws
 from app.domains.notifications.models import NotiStatus
-from app.domains.notifications.schemas import NotificationListResponse, NotificationSettingsResponse
+from app.domains.notifications.schemas import (
+    NotificationListResponse,
+    NotificationSettingsResponse,
+    NotificationSettingsUpdate,
+)
 from app.domains.notifications.service import notification_service
 from app.domains.users.models import User
 
@@ -25,6 +29,18 @@ async def list_notifications(
     return NotificationListResponse(total=total, items=items)
 
 
+@router.delete(
+    "/{notification_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_notification(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await notification_service.delete_user_notification(current_user.id, notification_id)
+    return None
+
+
 @router.get(
     "/settings",
     response_model=NotificationSettingsResponse,
@@ -34,6 +50,19 @@ async def get_settings(
     current_user: User = Depends(get_current_user),
 ) -> NotificationSettingsResponse:
     settings = await notification_service.get_user_settings(current_user.id)
+    return NotificationSettingsResponse.model_validate(settings)
+
+
+@router.patch(
+    "/settings",
+    response_model=NotificationSettingsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_settings(
+    data: NotificationSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    settings = await notification_service.update_user_settings(current_user.id, data)
     return NotificationSettingsResponse.model_validate(settings)
 
 

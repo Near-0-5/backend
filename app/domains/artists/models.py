@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 from tortoise import fields, models
 
+from app.domains.streams.models import CategoryType
+
 if TYPE_CHECKING:
     from tortoise.fields import ForeignKeyRelation, ManyToManyRelation
 
@@ -21,6 +23,7 @@ class GroupType(str, Enum):
 class Artist(models.Model):
     id = fields.BigIntField(primary_key=True)
     stage_name = fields.CharField(max_length=100, description="활동명")
+    category_type = fields.CharEnumField(CategoryType, max_length=20, null=True)
     profile_img_url = fields.CharField(max_length=255, null=True)
     agency = fields.CharField(max_length=100, null=True)
     description = fields.TextField(null=True)
@@ -33,6 +36,7 @@ class Artist(models.Model):
     if TYPE_CHECKING:
         sessions: ManyToManyRelation["ConcertSession"]
         session_mappings: ForeignKeyRelation["ConcertArtist"]
+        follows: ForeignKeyRelation["Follow"]
 
     class Meta:
         table = "artists"
@@ -41,10 +45,10 @@ class Artist(models.Model):
 class Follow(models.Model):
     id = fields.BigIntField(primary_key=True)
     user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
-        "models.User", related_name="follows"
+        "models.User", related_name="follows", on_delete=fields.CASCADE
     )
     artist: fields.ForeignKeyRelation["Artist"] = fields.ForeignKeyField(
-        "models.Artist", related_name="followers"
+        "models.Artist", related_name="followers", on_delete=fields.CASCADE
     )
     created_at = fields.DatetimeField(auto_now_add=True)
 

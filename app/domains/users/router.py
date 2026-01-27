@@ -1,10 +1,10 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Body, Depends, File, Response, UploadFile, status
 
 from app.api.deps import get_current_user
 from app.domains.users.models import User
-from app.domains.users.schemas import UserMeResponse
+from app.domains.users.schemas import UserMeResponse, UserMeUpdate
 from app.domains.users.service import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -28,9 +28,31 @@ router = APIRouter(prefix="/users", tags=["users"])
 )
 async def get_my_profile(
     current_user: Annotated[User, Depends(get_current_user)],
-) -> dict[str, Any]:
+) -> UserMeResponse:
     """내 프로필 정보를 반환합니다."""
     return await user_service.get_user_profile(current_user.id)
+
+
+@router.patch(
+    "/me",
+    response_model=UserMeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="내 프로필 수정",
+    description="로그인한 회원의 닉네임, 프로필 이미지, 알림 설정, 자기소개를 수정합니다.",
+)
+async def update_my_profile(
+    current_user: Annotated[User, Depends(get_current_user)], data: UserMeUpdate = Body(...)
+) -> Any:
+    """회원 정보를 수정하고 업데이트된 정보를 반환합니다."""
+
+    return await user_service.update_user_profile(current_user, data)
+
+
+@router.post("/me/image", summary="프로필 이미지 업로드")
+async def upload_my_profile_image(
+    current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
+) -> UserMeResponse:
+    return await user_service.update_profile_image(current_user, file)
 
 
 @router.delete("/me", summary="회원 탈퇴", status_code=status.HTTP_204_NO_CONTENT)

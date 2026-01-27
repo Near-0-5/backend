@@ -20,6 +20,9 @@ class NotificationItem(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class NotificationListResponse(BaseModel):
+    total: int
+    items: list[NotificationItem]
 
 class NotificationEvent(BaseModel):
     type: Literal["notification"] = "notification"

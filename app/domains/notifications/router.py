@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, Query, WebSocket, status
 
 from app.api.deps import get_current_user, get_current_user_from_refresh_cookie_ws
 from app.domains.notifications.models import NotiStatus
-from app.domains.notifications.schemas import NotificationListResponse
+from app.domains.notifications.schemas import (
+    NotificationListResponse,
+    NotificationSettingsResponse
+)
 from app.domains.notifications.service import notification_service
 from app.domains.users.models import User
 
@@ -23,6 +26,18 @@ async def list_notifications(
         offset=offset,
     )
     return NotificationListResponse(total=total, items=items)
+
+
+@router.get(
+    "/settings",
+    response_model=NotificationSettingsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_settings(
+    current_user: User = Depends(get_current_user),
+) -> NotificationSettingsResponse:
+    return await notification_service.get_user_settings(current_user.id)
+
 
 
 @router.websocket("/ws")

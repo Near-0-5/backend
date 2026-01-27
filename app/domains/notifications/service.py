@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import cast
 
+from typing import cast
 from fastapi import WebSocket, WebSocketDisconnect
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from app.core.config import KST, now_kst
 from app.domains.notifications.manager import notification_manager
-from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus
-from app.domains.notifications.schemas import NotificationEvent, NotificationItem
+from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
+from app.domains.notifications.schemas import (
+    NotificationEvent,
+    NotificationItem,
+)
 from app.domains.streams.models import ConcertSession, StreamStatus
 from app.domains.users.models import User
 
@@ -53,6 +56,21 @@ def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
 
 
 class NotificationService:
+    async def list_user_notifications(
+        self,
+        user_id: int,
+        *,
+        status: NotiStatus | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[ConcertNoti], int]:
+        query = ConcertNoti.filter(user_id=user_id)
+        if status:
+            query = query.filter(status=status)
+        total = await query.count()
+        items = await query.order_by("-send_at").offset(offset).limit(limit)
+        return list(items), total
+
     async def schedule_session_notifications(
         self, session_id: int, *, session: ConcertSession | None = None
     ) -> int:

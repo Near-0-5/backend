@@ -9,7 +9,7 @@ from tortoise.expressions import Q
 
 from app.core.config import KST, now_kst
 from app.domains.notifications.manager import notification_manager
-from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus
+from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
 from app.domains.notifications.schemas import (
     NotificationEvent,
     NotificationItem,
@@ -56,6 +56,13 @@ def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
 
 
 class NotificationService:
+    async def get_user_settings(self, user_id: int) -> UserNoti:
+        try:
+            noti, _ = await UserNoti.get_or_create(user_id=user_id)
+            return noti
+        except IntegrityError:
+            return await UserNoti.get(user_id=user_id)
+
     async def list_user_notifications(
         self,
         user_id: int,
@@ -65,7 +72,7 @@ class NotificationService:
         offset: int,
     ) -> tuple[list[ConcertNoti], int]:
         query = ConcertNoti.filter(user_id=user_id)
-        if status:
+        if status is not None:
             query = query.filter(status=status)
         total = await query.count()
         items = await query.order_by("-send_at").offset(offset).limit(limit)

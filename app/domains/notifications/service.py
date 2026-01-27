@@ -57,10 +57,11 @@ def _build_content(session: ConcertSession, kind: NotiKind) -> tuple[str, str]:
 
 class NotificationService:
     async def get_user_settings(self, user_id: int) -> UserNoti:
-        noti = await UserNoti.get_or_none(user_id=user_id)
-        if noti:
+        try:
+            noti, _ = await UserNoti.get_or_create(user_id=user_id)
             return noti
-        return await UserNoti.create(user_id=user_id)
+        except IntegrityError:
+            return await UserNoti.get(user_id=user_id)
 
     async def list_user_notifications(
         self,
@@ -71,7 +72,7 @@ class NotificationService:
         offset: int,
     ) -> tuple[list[ConcertNoti], int]:
         query = ConcertNoti.filter(user_id=user_id)
-        if status:
+        if status is not None:
             query = query.filter(status=status)
         total = await query.count()
         items = await query.order_by("-send_at").offset(offset).limit(limit)

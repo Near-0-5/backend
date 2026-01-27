@@ -13,7 +13,7 @@ from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, 
 from app.domains.notifications.schemas import (
     NotificationEvent,
     NotificationItem,
-    NotificationSettingsUpdate
+    NotificationSettingsUpdate,
 )
 from app.domains.streams.models import ConcertSession, StreamStatus
 from app.domains.users.models import User

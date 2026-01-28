@@ -4,7 +4,13 @@ from fastapi import APIRouter, Body, Depends, File, Response, UploadFile, status
 
 from app.api.deps import get_current_user
 from app.domains.users.models import User
-from app.domains.users.schemas import FavoriteArtistListResponse, UserMeResponse, UserMeUpdate
+from app.domains.users.schemas import (
+    FavoriteArtistCreate,
+    FavoriteArtistListResponse,
+    FavoriteArtistResponse,
+    UserMeResponse,
+    UserMeUpdate,
+)
 from app.domains.users.service import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -82,3 +88,16 @@ async def get_my_favorite_artists(
     현재 로그인한 유저가 팔로우 중인 아티스트 목록을 반환합니다.
     """
     return await user_service.get_favorite_artists(current_user)
+
+
+@router.post(
+    "/me/favorite-artists",
+    response_model=FavoriteArtistResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="선호 아티스트 추가",
+    description="로그인한 사용자가 특정 아티스트를 팔로우 목록에 추가합니다.",
+)
+async def add_my_favorite_artist(
+    data: FavoriteArtistCreate, current_user: User = Depends(get_current_user)
+) -> FavoriteArtistResponse:
+    return await user_service.add_follow_artist(current_user, data)

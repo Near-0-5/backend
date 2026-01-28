@@ -7,12 +7,14 @@ from tortoise.transactions import in_transaction
 
 from app.core.config import settings
 from app.core.utils.image_resizer import ImageResizer
-from app.domains.artists.models import Follow
+from app.domains.artists.models import Artist, Follow
 from app.domains.notifications.models import UserNoti
 from app.domains.users.models import User, UserCatFav, UserDeleteLog
 from app.domains.users.schemas import (
+    FavoriteArtistCreate,
     FavoriteArtistItem,
     FavoriteArtistListResponse,
+    FavoriteArtistResponse,
     UserMeResponse,
     UserMeUpdate,
 )
@@ -155,23 +157,45 @@ class UserService:
             await Follow.filter(user=user).select_related("artist").order_by("-created_at")
         )
 
-        items = []
-        for record in follow_records:
-            artist = record.artist
-            items.append(
-                FavoriteArtistItem(
-                    id=artist.id,
-                    stage_name=artist.stage_name,
-                    profile_img_url=artist.profile_img_url,
-                    category=artist.category_type,
-                    group_type=artist.group_type,
-                    member_count=artist.member_count,
-                    agency=artist.agency,
-                    followed_at=record.created_at,
-                )
+        items = [
+            FavoriteArtistItem(
+                id=record.artist.id,
+                name=record.artist.stage_name,
+                profile_img=record.artist.profile_img_url,
+                category_type=record.artist.category_type,
+                group_type=record.artist.group_type,
+                member_count=record.artist.member_count,
+                agency=record.artist.agency,
+                created_at=record.created_at,
             )
+            for record in follow_records
+        ]
 
         return FavoriteArtistListResponse(total=len(items), items=items)
+
+    async def add_follow_artist(
+        self, user: User, data: FavoriteArtistCreate
+    ) -> FavoriteArtistResponse:
+        # 아티스트 존재 여부 확인
+        artist = await Artist.get_or_none(id=data.artist_id)
+        if not artist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"아티스트(ID: {data.artist_id})를 찾을 수 없습니다.",
+            )
+
+        # 중복 팔로우 체크 및 생성 (get_or_create 보다 명시적인 에러 처리를 위해 분리)
+        follow, created = await Follow.get_or_create(user=user, artist=artist)
+        if not created:
+            raise HTTPException(status_code=409, detail="이미 추가된 아티스트입니다.")
+
+        return FavoriteArtistResponse(
+            user_id=user.id,
+            artist_id=artist.id,
+            artist_name=artist.stage_name,  # Artist 모델의 stage_name 사용
+            profile_img_url=artist.profile_img_url,  # alias 설정에 따라 매핑
+            created_at=follow.created_at,  # Follow 모델의 생성일
+        )
 
 
 user_service: UserService = UserService()

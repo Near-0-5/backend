@@ -89,7 +89,11 @@ class TestArtistService:
     async def test_get_artist_detail_success(self, initialize_tests):
         """아티스트 상세 조회가 정상 작동하는지 테스트합니다."""
         await Artist.create(
-            id=501, stage_name="Detail Artist", agency="Test Agency", description="Test Description"
+            id=501,
+            stage_name="Detail Artist",
+            agency="Test Agency",
+            description="Test Description",
+            category_type=CategoryType.KPOP,
         )
 
         response = await artist_service.get_artist_detail(artist_id=501)

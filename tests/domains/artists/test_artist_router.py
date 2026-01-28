@@ -23,7 +23,12 @@ class TestArtistRouter:
     async def test_get_artist_detail_router(self, client: AsyncClient, initialize_tests):
         """GET /artists/{artist_id} 라우터 엔드포인트를 테스트합니다."""
         # 데이터 준비
-        await Artist.create(id=2, stage_name="Detail Router", agency="Router Agency")
+        await Artist.create(
+            id=2,
+            stage_name="Detail Router",
+            agency="Router Agency",
+            category_type=CategoryType.KPOP,
+        )
 
         # API 호출
         response = await client.get("/api/v1/artists/2")

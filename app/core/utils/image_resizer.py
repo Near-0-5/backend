@@ -74,7 +74,7 @@ class ImageResizer:
     async def delete_all_by_id_path(self, image_url: str | None) -> None:
         """
         URL에서 폴더 경로를 추출하여 해당 폴더 내의 모든 파일을 삭제합니다.
-        보안을 위해 유저 프로필 경로 패턴(users/{id}/profile)만 허용합니다.
+        보안을 위해 지정한 경로 패턴(users/{id}/profile 등)만 허용합니다.
         """
         if not image_url:
             return
@@ -84,9 +84,13 @@ class ImageResizer:
             full_path = parsed_url.path.lstrip("/")
             folder_prefix = os.path.dirname(full_path)  # ex: "users/1/profile"
 
-            # users/{숫자}/profile 패턴인지 확인
-            profile_path_pattern = r"^users/\d+/profile$"
-            if not re.match(profile_path_pattern, folder_prefix):
+            # users/{숫자}/profile 등의 패턴인지 확인
+            allowed_patterns = [
+                r"^users/\d+/profile$",
+                r"^artists/\d+/profile$",
+                r"^concerts/\d+/thumbnail$",
+            ]
+            if not any(re.match(pattern, folder_prefix) for pattern in allowed_patterns):
                 logger.warning(f"S3 삭제 거부: 허용되지 않은 경로 접근 ({folder_prefix})")
                 return
 

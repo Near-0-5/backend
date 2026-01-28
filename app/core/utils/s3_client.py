@@ -9,6 +9,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+
 
 class S3Client:
     def __init__(self) -> None:
@@ -24,7 +26,9 @@ class S3Client:
         self, file: Any, path_prefix: str = "", extra_args: dict[str, Any] | None = None
     ) -> str:
         original_name = getattr(file, "name", "unknown_file")
-        ext = original_name.split(".")[-1] if "." in original_name else "bin"
+        ext = original_name.split(".")[-1].lower() if "." in original_name else "bin"
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            ext = "bin"
 
         file_name = f"{uuid.uuid4()}.{ext}"
 

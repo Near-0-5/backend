@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends, File, Response, UploadFile, status
 
 from app.api.deps import get_current_user
 from app.domains.users.models import User
-from app.domains.users.schemas import UserMeResponse, UserMeUpdate
+from app.domains.users.schemas import FavoriteArtistListResponse, UserMeResponse, UserMeUpdate
 from app.domains.users.service import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -68,3 +68,17 @@ async def withdraw(
     response.delete_cookie(key="refresh_token", path="/")
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/me/favorite-artists",
+    response_model=FavoriteArtistListResponse,
+    summary="사용자의 선호 아티스트 목록 조회",
+)
+async def get_my_favorite_artists(
+    current_user: User = Depends(get_current_user),
+) -> FavoriteArtistListResponse:
+    """
+    현재 로그인한 유저가 팔로우 중인 아티스트 목록을 반환합니다.
+    """
+    return await user_service.get_favorite_artists(current_user)

@@ -4,6 +4,7 @@ from fastapi import UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domains.notifications.models import UserNoti
+from app.domains.streams.models import CategoryType
 from app.domains.users.models import User, UserCatFav
 
 
@@ -68,3 +69,19 @@ class UserMeUpdate(BaseModel):
     bio: str | None = Field(None, max_length=500)
     profile_image: UploadFile | None = None
     updated_at: datetime
+
+
+class FavoriteArtistItem(BaseModel):
+    id: int
+    stage_name: str
+    profile_img_url: str | None
+    category: CategoryType
+    group_type: str | None
+    member_count: int | None
+    agency: str | None
+    followed_at: datetime  # (alias="follows.created_at")
+
+
+class FavoriteArtistListResponse(BaseModel):
+    total: int
+    items: list[FavoriteArtistItem]

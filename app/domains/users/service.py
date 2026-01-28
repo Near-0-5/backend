@@ -7,9 +7,15 @@ from tortoise.transactions import in_transaction
 
 from app.core.config import settings
 from app.core.utils.image_resizer import ImageResizer
+from app.domains.artists.models import Follow
 from app.domains.notifications.models import UserNoti
 from app.domains.users.models import User, UserCatFav, UserDeleteLog
-from app.domains.users.schemas import UserMeResponse, UserMeUpdate
+from app.domains.users.schemas import (
+    FavoriteArtistItem,
+    FavoriteArtistListResponse,
+    UserMeResponse,
+    UserMeUpdate,
+)
 
 
 class UserService:
@@ -138,6 +144,34 @@ class UserService:
 
         # 유저 삭제. 추후 2주 유예기간이 생길 시 수정필요.
         await user.delete()
+
+    async def get_favorite_artists(self, user: User) -> FavoriteArtistListResponse:
+        """
+        사용자가 팔로우한 아티스트 목록을 조회합니다.
+        팔로우한 artists의 정보와 수를 가져옵니다.
+        """
+        # 최신 팔로우 순으로 정렬
+        follow_records = (
+            await Follow.filter(user=user).select_related("artist").order_by("-created_at")
+        )
+
+        items = []
+        for record in follow_records:
+            artist = record.artist
+            items.append(
+                FavoriteArtistItem(
+                    id=artist.id,
+                    stage_name=artist.stage_name,
+                    profile_img_url=artist.profile_img_url,
+                    category=artist.category_type,
+                    group_type=artist.group_type,
+                    member_count=artist.member_count,
+                    agency=artist.agency,
+                    followed_at=record.created_at,
+                )
+            )
+
+        return FavoriteArtistListResponse(total=len(items), items=items)
 
 
 user_service: UserService = UserService()

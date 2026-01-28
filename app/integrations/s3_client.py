@@ -1,3 +1,19 @@
+"""
+ImageStorage 전용 S3 클라이언트 (IVS 녹화는 cfn에서 자동 설정함)
+
+- IVS S3 버킷과는 분리된 버킷을 사용 -> 따라서 bucket_name은 settings.IMAGES_BUCKET으로 고정함
+- Image 외 파일 업로드 금지
+- path_prefix는 아래와 같이 고정
+    1) 유저 프로필 이미지
+        path_prefix=f"users/{user_id}/profile/"
+
+    2) 아티스트 프로필 이미지
+        path_prefix=f"artists/{artist_id}/profile/"
+
+    3) 콘서트 썸네일 이미지
+        path_prefix=f"concerts/{concert_id}/thumbnail/"
+"""
+
 import logging
 import uuid
 from typing import Any, cast

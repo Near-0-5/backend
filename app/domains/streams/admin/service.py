@@ -1,10 +1,11 @@
 from typing import Literal, cast
 
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
 
 from app.core.pagination import paginate_cursor
+from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist
 from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
@@ -34,6 +35,7 @@ class StreamAdminService:
     def __init__(self, ivs_client: IVSClient, playback_provider: IVSPlaybackProvider):
         self.ivs_client = ivs_client
         self.playback_provider = playback_provider
+        self.image_resizer = ImageResizer()
 
     async def create_concert(self, data: ConcertCreateRequest, user: User) -> Concert:
         """
@@ -41,6 +43,38 @@ class StreamAdminService:
         """
         StreamPermission.must_be_admin(user)
         return await Concert.create(**data.model_dump())
+
+    async def update_concert_thumbnail(
+        self, concert_id: int, file: UploadFile, user: User
+    ) -> Concert:
+        """
+        [Admin] 콘서트 썸네일 생성 및 수정
+        """
+        StreamPermission.must_be_admin(user)
+
+        # 콘서트 있는지 확인
+        concert = await Concert.get_or_none(id=concert_id)
+        if not concert:
+            raise HTTPException(status_code=404, detail="콘서트를 찾을 수 없습니다.")
+
+        # 기존 이미지가 있다면 S3 폴더 삭제
+        if concert.thumbnail_url:
+            await self.image_resizer.delete_all_by_id_path(concert.thumbnail_url)
+
+        # 새로운 이미지 리사이징 업로드
+        path_prefix = f"concerts/{concert.id}/thumbnail"
+        sizes = (300, 640, 1280)
+
+        urls = await self.image_resizer.upload_square_resizes(
+            image_file=file.file, sizes=sizes, path_prefix=path_prefix
+        )
+
+        # DB 업데이트
+        img_url = urls.get("640")
+        concert.thumbnail_url = img_url if img_url else ""
+        await concert.save()
+
+        return concert
 
     async def create_session_with_infrastructure(
         self, concert_id: int, data: SessionCreateRequest, user: User

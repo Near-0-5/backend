@@ -1,7 +1,6 @@
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi import Depends
 
-from app.api.deps import get_current_user, get_user_from_refresh_token
+from app.api.deps import get_current_user
 from app.domains.streams.admin.service import StreamAdminService
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.permissions import StreamPermission

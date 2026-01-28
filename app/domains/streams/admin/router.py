@@ -1,4 +1,15 @@
-from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    Path,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -34,6 +45,24 @@ async def create_concert(
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> Concert:
     return await service.create_concert(data, current_admin)
+
+
+@router.patch(
+    "/concerts/{concert_id}/thumbnail",
+    response_model=ConcertResponse,
+    summary="콘서트 썸네일 이미지 생성 및 수정",
+    description="콘서트 썸네일 이미지를 업로드 또는 수정합니다.",
+)
+async def update_concert_thumbnail(
+    current_admin: User = Depends(get_admin_user),
+    concert_id: int = Path(..., description="콘서트 ID"),
+    thumbnail_file: UploadFile = File(..., description="썸네일 이미지 파일"),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> Concert:
+    # 인증된 current_admin 객체를 서비스로 직접 전달
+    return await service.update_concert_thumbnail(
+        concert_id=concert_id, file=thumbnail_file, user=current_admin
+    )
 
 
 @router.post(

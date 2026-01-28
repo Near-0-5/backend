@@ -101,15 +101,9 @@ class S3Client:
         if not key:
             return ""
 
-        custom_domain = getattr(settings, "AWS_S3_CUSTOM_DOMAIN", None)
-
-        if custom_domain:
-            domain = custom_domain
-        else:
-            region = settings.AWS_REGION
-            domain = f"{self.bucket_name}.s3.{region}.amazonaws.com"
-
-        return f"https://{domain.rstrip('/')}/{key.lstrip('/')}"
+        return (
+            f"https://{self.bucket_name}.s3.{settings.AWS_REGION}.amazonaws.com/{key.lstrip('/')}"
+        )
 
     async def generate_presigned_url(self, key: str, expires_in: int = 3600) -> str:
         try:

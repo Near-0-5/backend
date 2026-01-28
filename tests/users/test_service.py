@@ -6,13 +6,13 @@ import pytest
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
-from app.core.utils.s3_client import S3Client
 from app.domains.artists.models import Artist
 from app.domains.notifications.models import UserNoti
 from app.domains.streams.models import CategoryType
 from app.domains.users.models import GenderChoices, ProviderChoice, User, UserCatFav, UserDeleteLog
 from app.domains.users.schemas import NotiSettings, UserMeUpdate
 from app.domains.users.service import user_service
+from app.integrations.s3_client import S3Client
 
 
 @pytest.mark.asyncio
@@ -95,9 +95,9 @@ async def test_update_profile_image_coverage(initialize_tests):
 
     with (
         patch(
-            "app.core.utils.s3_client.S3Client.upload_with_key", new_callable=AsyncMock
+            "app.integrations.s3_client.S3Client.upload_with_key", new_callable=AsyncMock
         ) as mock_s3_upload,
-        patch("app.core.utils.s3_client.S3Client.build_url") as mock_build_url,
+        patch("app.integrations.s3_client.S3Client.build_url") as mock_build_url,
     ):
         mock_s3_upload.return_value = "users/1/profile/profile200.png"
         mock_build_url.return_value = "http://s3.url/200.png"

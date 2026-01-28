@@ -3,6 +3,8 @@ from datetime import datetime
 from fastapi import UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domains.artists.models import GroupType
+from app.domains.artists.schemas import ArtistBase
 from app.domains.notifications.models import UserNoti
 from app.domains.streams.models import CategoryType
 from app.domains.users.models import User, UserCatFav
@@ -71,17 +73,34 @@ class UserMeUpdate(BaseModel):
     updated_at: datetime
 
 
-class FavoriteArtistItem(BaseModel):
-    id: int
-    stage_name: str
-    profile_img_url: str | None
-    category: CategoryType
-    group_type: str | None
+class FavoriteArtistItem(ArtistBase):
+    """목록 조회용 (기존 ArtistBase 상속하도록 변경)"""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    category_type: CategoryType
+    group_type: GroupType | None = None
     member_count: int | None
-    agency: str | None
-    followed_at: datetime  # (alias="follows.created_at")
+    agency: str | None = None
+    created_at: datetime
 
 
 class FavoriteArtistListResponse(BaseModel):
-    total: int
+    total: int = Field(..., description="총 팔로우 수")
     items: list[FavoriteArtistItem]
+
+
+class FavoriteArtistCreate(BaseModel):
+    artist_id: int = Field(..., description="팔로우할 아티스트의 고유 ID")
+
+
+class FavoriteArtistResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int = Field(..., description="사용자 ID")
+    artist_id: int = Field(..., description="아티스트 ID")
+    artist_name: str = Field(..., description="아티스트 이름")
+    artist_profile_image: str | None = Field(
+        None, alias="profile_img_url", description="아티스트 프로필 이미지"
+    )
+    added_at: datetime = Field(..., alias="created_at", description="팔로우 추가 일시")

@@ -15,7 +15,7 @@ ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 class S3Client:
     def __init__(self) -> None:
         self.session = aioboto3.Session()
-        self.bucket_name = settings.S3_RECORDING_BUCKET
+        self.bucket_name = settings.IMAGES_BUCKET
         self.aws_config = {
             "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
             "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,

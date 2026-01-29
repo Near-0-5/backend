@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = "ap-northeast-2"
     IVS_PLAYBACK_PRIVATE_KEY_B64: str = Field(..., validation_alias="IVS_PLAYBACK_PRIVATE_KEY_B64")
     S3_RECORDING_BUCKET: str
+    IMAGES_BUCKET: str
 
     # social_login
     KAKAO_REST_API_KEY: str

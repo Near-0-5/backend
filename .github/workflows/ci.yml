@@ -100,6 +100,7 @@ jobs:
       AWS_REGION: ap-northeast-2
       IVS_PLAYBACK_PRIVATE_KEY_B64: ${{ secrets.IVS_PLAYBACK_PRIVATE_KEY_B64 }}
       S3_RECORDING_BUCKET: my-concert-ivs-recordings
+      IMAGES_BUCKET: ${{ secrets.IMAGES_BUCKET }}
 
       ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
       ADMIN_USERNAME: admin

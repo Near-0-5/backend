@@ -112,6 +112,7 @@ class ConcertResponse(BaseModel):
     title: str
     category: CategoryType
     description: str | None = None
+    thumbnail_url: str | None = Field(None)
     created_at: datetime
 
 

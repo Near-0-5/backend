@@ -5,7 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.domains.streams.deps import get_admin_user
-from app.domains.streams.models import AccessLevel, ChannelType, LatencyMode, StreamStatus
+from app.domains.streams.models import AccessLevel, ChannelType, Concert, LatencyMode, StreamStatus
 from app.main import app
 
 
@@ -55,11 +55,12 @@ class TestStreamRouter:
                 ) as mock_create_session,
             ):
                 # concert mock
-                mock_concert = MagicMock()
+                mock_concert = MagicMock(spec=Concert)
                 mock_concert.id = 1
                 mock_concert.title = "Test Concert"
                 mock_concert.description = "Test Description"
                 mock_concert.category = "K-POP"
+                mock_concert.thumbnail_url = None
                 mock_concert.created_at = datetime.now()
                 mock_create_concert.return_value = mock_concert
 

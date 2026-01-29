@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 from typing import Any
@@ -9,7 +10,9 @@ from urllib.parse import urlparse
 from fastapi import HTTPException, status
 from PIL import Image, ImageOps
 
-from app.core.utils.s3_client import S3Client
+from app.integrations.s3_client import S3Client
+
+logger = logging.getLogger(__name__)
 
 
 class ImageResizer:
@@ -29,9 +32,11 @@ class ImageResizer:
             source.load()
         except Exception as exc:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="이미지 처리에 실패했습니다.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="유효한 이미지 파일이 아닙니다.",
             ) from exc
+
+        base_prefix = path_prefix.rstrip("/")
 
         for size in sizes:
             try:
@@ -46,26 +51,30 @@ class ImageResizer:
                 buffer.name = f"image_{size}.png"
                 resized.save(buffer, format="PNG")
                 buffer.seek(0)
+
+                key = f"{base_prefix}/image_{size}.png"
+
+                # 비동기 업로드 호출
+                await self.s3_client.upload_with_key(
+                    buffer,
+                    key=key,
+                    extra_args={"ContentType": "image/png"},
+                )
+
+                urls[str(size)] = self.s3_client.build_url(key)
+
             except Exception as exc:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="이미지 리사이징에 실패했습니다.",
+                    detail="이미지 리사이징 또는 업로드에 실패했습니다.",
                 ) from exc
 
-            base_prefix = path_prefix.rstrip("/")
-            # 비동기 업로드 호출
-            key = await self.s3_client.upload_with_key(
-                buffer,
-                key=f"{base_prefix}/profile{size}.png",
-                extra_args={"ContentType": "image/png"},
-            )
-            urls[str(size)] = self.s3_client.build_url(key)
         return urls
 
     async def delete_all_by_id_path(self, image_url: str | None) -> None:
         """
         URL에서 폴더 경로를 추출하여 해당 폴더 내의 모든 파일을 삭제합니다.
-        보안을 위해 유저 프로필 경로 패턴(users/{id}/profile)만 허용합니다.
+        보안을 위해 지정한 경로 패턴(users/{id}/profile 등)만 허용합니다.
         """
         if not image_url:
             return
@@ -75,15 +84,18 @@ class ImageResizer:
             full_path = parsed_url.path.lstrip("/")
             folder_prefix = os.path.dirname(full_path)  # ex: "users/1/profile"
 
-            # users/{숫자}/profile 패턴인지 확인
-            profile_path_pattern = r"^users/\d+/profile$"
-            if not re.match(profile_path_pattern, folder_prefix):
-                print(f"S3 삭제 거부: 허용되지 않은 경로 접근 ({folder_prefix})")
+            # users/{숫자}/profile 등의 패턴인지 확인
+            allowed_patterns = [
+                r"^users/\d+/profile$",
+                r"^artists/\d+/profile$",
+                r"^concerts/\d+/thumbnail$",
+            ]
+            if not any(re.match(pattern, folder_prefix) for pattern in allowed_patterns):
+                logger.warning(f"S3 삭제 거부: 허용되지 않은 경로 접근 ({folder_prefix})")
                 return
 
-            if folder_prefix:
-                await self.s3_client.delete_prefix(prefix=folder_prefix)
-                print(f"S3 이미지 폴더 삭제 완료: {folder_prefix}")
+            await self.s3_client.delete_prefix(prefix=folder_prefix)
+            logger.info(f"S3 이미지 폴더 삭제 완료: {folder_prefix}")
 
         except Exception as e:
-            print(f"S3 삭제 도중 에러 발생: {e}")
+            logger.error(f"S3 삭제 도중 에러 발생: {e}", exc_info=True)

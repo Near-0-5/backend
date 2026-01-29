@@ -1,3 +1,19 @@
+"""
+ImageStorage 전용 S3 클라이언트 (IVS 녹화는 cfn에서 자동 설정함)
+
+- IVS S3 버킷과는 분리된 버킷을 사용 -> 따라서 bucket_name은 settings.IMAGES_BUCKET으로 고정함
+- Image 외 파일 업로드 금지
+- path_prefix는 아래와 같이 고정
+    1) 유저 프로필 이미지
+        path_prefix=f"users/{user_id}/profile/"
+
+    2) 아티스트 프로필 이미지
+        path_prefix=f"artists/{artist_id}/profile/"
+
+    3) 콘서트 썸네일 이미지
+        path_prefix=f"concerts/{concert_id}/thumbnail/"
+"""
+
 import logging
 import uuid
 from typing import Any, cast
@@ -9,11 +25,13 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+
 
 class S3Client:
     def __init__(self) -> None:
         self.session = aioboto3.Session()
-        self.bucket_name = settings.S3_RECORDING_BUCKET
+        self.bucket_name = settings.IMAGES_BUCKET
         self.aws_config = {
             "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
             "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,
@@ -24,7 +42,9 @@ class S3Client:
         self, file: Any, path_prefix: str = "", extra_args: dict[str, Any] | None = None
     ) -> str:
         original_name = getattr(file, "name", "unknown_file")
-        ext = original_name.split(".")[-1] if "." in original_name else "bin"
+        ext = original_name.split(".")[-1].lower() if "." in original_name else "bin"
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            ext = "bin"
 
         file_name = f"{uuid.uuid4()}.{ext}"
 
@@ -101,15 +121,9 @@ class S3Client:
         if not key:
             return ""
 
-        custom_domain = getattr(settings, "AWS_S3_CUSTOM_DOMAIN", None)
-
-        if custom_domain:
-            domain = custom_domain
-        else:
-            region = settings.AWS_REGION
-            domain = f"{self.bucket_name}.s3.{region}.amazonaws.com"
-
-        return f"https://{domain.rstrip('/')}/{key.lstrip('/')}"
+        return (
+            f"https://{self.bucket_name}.s3.{settings.AWS_REGION}.amazonaws.com/{key.lstrip('/')}"
+        )
 
     async def generate_presigned_url(self, key: str, expires_in: int = 3600) -> str:
         try:

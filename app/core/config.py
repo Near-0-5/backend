@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int  # 토큰 유효분
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 리프레시 토큰 유효일
 
+    # CORS 설정
+    CORS_ORIGINS: list[str] = []
+
     # ADMIN 계정
     ADMIN_USERNAME: str
     ADMIN_PASSWORD: str

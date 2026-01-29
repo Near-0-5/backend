@@ -134,6 +134,12 @@ class SessionResponse(BaseModel):
     )
 
 
+class ConcertDetailResponse(ConcertResponse):
+    """콘서트 상세 응답"""
+
+    sessions: list[SessionResponse] = Field(default_factory=list)
+
+
 class StreamIngestResponse(BaseModel):
     """송출 OBS 응답"""
 

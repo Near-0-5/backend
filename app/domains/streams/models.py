@@ -149,7 +149,7 @@ class ConcertSession(models.Model):
         table = "concert_sessions"
 
     def __str__(self) -> str:
-        return f"{self.session_name} (id={self.id}, concert_id={self.concert_id})"
+        return f"{self.session_name} (id={self.id}, concert_id={self.concert.id})"
 
 
 class ConcertArtist(models.Model):
@@ -181,7 +181,7 @@ class ConcertArtist(models.Model):
         unique_together = ("artist", "session")  # 중복 출연 등록 방지
 
     def __str__(self) -> str:
-        return f"session_id={self.session_id} artist_id={self.artist_id}"
+        return f"session_id={self.session.id} artist_id={self.artist.id}"
 
 
 class StreamChannel(models.Model):
@@ -235,7 +235,7 @@ class StreamChannel(models.Model):
         table = "stream_channels"
 
     def __str__(self) -> str:
-        return f"session_id={self.session_id} (id={self.id})"
+        return f"session_id={self.session.id} (id={self.id})"
 
     # 스트림 키를 대칭키 방식으로 암호화해서 DB에 저장
     def set_stream_key(self, plain_key: str) -> None:
@@ -307,7 +307,7 @@ class StreamVod(models.Model):
         table = "stream_vods"
 
     def __str__(self) -> str:
-        return f"session_id={self.session_id} (id={self.id})"
+        return f"session_id={self.session.id} (id={self.id})"
 
     @property
     def full_s3_path(self) -> str:

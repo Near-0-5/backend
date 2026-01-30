@@ -74,7 +74,7 @@ class UserCatFav(models.Model):
         unique_together = (("user", "category"),)  # 동일 유저 동일 카테고리 중복 추가 방지
 
     def __str__(self) -> str:
-        return f"user_id={self.user_id} category={self.category}"
+        return f"user_id={self.user.id} category={self.category}"
 
 
 class UserDeleteLog(models.Model):

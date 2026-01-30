@@ -38,7 +38,7 @@ class UserNoti(models.Model):
         table = "user_notis"
 
     def __str__(self) -> str:
-        return f"user_id={self.user_id}"
+        return f"user_id={self.user.id}"
 
 
 class ConcertNoti(models.Model):
@@ -74,4 +74,4 @@ class ConcertNoti(models.Model):
         indexes = (("status", "send_at"),)
 
     def __str__(self) -> str:
-        return f"user_id={self.user_id} session_id={self.session_id} kind={self.kind}"
+        return f"user_id={self.user.id} session_id={self.session.id} kind={self.kind}"

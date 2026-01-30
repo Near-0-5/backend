@@ -1,5 +1,3 @@
-from collections.abc import Sequence
-
 from tortoise import Model
 from tortoise.queryset import QuerySet
 
@@ -10,7 +8,7 @@ async def paginate_cursor[T: Model](
     limit: int,
     cursor_field: str = "id",
     order_by: str = "-id",
-) -> tuple[Sequence[T], int | None]:
+) -> tuple[list[T], int | None]:
     """
     범용 커서 페이지네이션 함수
     """

@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from app.domains.streams import deps as streams_deps
 from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
+    ConcertDetailResponse,
     ConcertResponse,
     SessionCreateRequest,
     SessionResponse,
@@ -45,6 +46,65 @@ async def create_concert(
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> Concert:
     return await service.create_concert(data, current_admin)
+
+
+@router.get(
+    "/concerts",
+    response_model=list[ConcertResponse],
+    summary="콘서트 목록 조회",
+)
+async def list_concerts(
+    response: Response,
+    cursor: int | None = Query(None, description="마지막으로 조회된 콘서트 ID"),
+    limit: int = Query(20, ge=1, le=100),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> list[Concert]:
+    concerts, next_cursor = await service.list_concerts(current_admin, limit, cursor)
+
+    if next_cursor is not None:
+        response.headers["X-Next-Cursor"] = str(next_cursor)
+    return concerts
+
+
+@router.get(
+    "/concerts/{concert_id}",
+    response_model=ConcertDetailResponse,
+    summary="콘서트 상세 조회",
+)
+async def get_concert_detail(
+    concert_id: int = Path(..., description="콘서트 ID"),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> ConcertDetailResponse:
+    return await service.get_concert_detail(concert_id, current_admin)
+
+
+@router.patch(
+    "/concerts/{concert_id}",
+    response_model=ConcertResponse,
+    summary="콘서트 정보 수정",
+)
+async def update_concert(
+    concert_id: int = Path(...),
+    data: ConcertCreateRequest = Body(...),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> Concert:
+    return await service.update_concert(concert_id, data, current_admin)
+
+
+@router.delete(
+    "/concerts/{concert_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="콘서트 및 관련 인프라 전체 삭제",
+)
+async def delete_concert(
+    concert_id: int = Path(...),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> None:
+    return await service.delete_concert_with_infrastructure(concert_id, current_admin)
 
 
 @router.patch(

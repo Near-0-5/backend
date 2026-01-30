@@ -17,12 +17,12 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
-from fastadmin import fastapi_app as admin_app
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise import Tortoise
 
-from app.api.router import api_router
 from app.core.config import settings
+from app.admin.app import admin_app
+from app.api.router import api_router
 from app.core.tortoise_config import TORTOISE_ORM
 
 if TYPE_CHECKING:

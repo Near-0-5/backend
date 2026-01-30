@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 import httpx
-from fastapi import HTTPException, UploadFile, status
+from fastapi import HTTPException, Response, UploadFile, status
 from tortoise.transactions import in_transaction
 
 from app.core.config import settings
@@ -196,6 +196,25 @@ class UserService:
             profile_img_url=artist.profile_img_url,  # alias 설정에 따라 매핑
             created_at=follow.created_at,  # Follow 모델의 생성일
         )
+
+    async def remove_follow_artist(self, user: User, artist_id: int) -> Response:
+        """
+        사용자가 요청한 선호 아티스트를 삭제(언팔로우)합니다.
+        """
+        # 팔로우 관계 존재 여부 확인
+        follow = await Follow.get_or_none(user=user, artist_id=artist_id)
+
+        if not follow:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"팔로우 중인 아티스트(ID: {artist_id})를 찾을 수 없습니다.",
+            )
+
+        # 팔로우 기록 삭제
+        await follow.delete()
+
+        # 성공하면
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 user_service: UserService = UserService()

@@ -117,6 +117,7 @@ jobs:
       KAKAO_CLIENT_SECRET: "GPFeAF5PbNB41dSF2iTBdwSKoD1krunt"
       KAKAO_ADMIN_KEY: "be42a537604c50c5673929aa78daa7e5"
       CALLBACK_REDIRECT_URL: "http://52.78.124.109:8000/docs"
+      CORS_ORIGINS: '["https://near-0-5.vercel.app", "http://localhost:5173", "http://localhost:3000"]'
 
     steps:
       - name: Checkout code

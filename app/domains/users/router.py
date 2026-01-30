@@ -54,13 +54,6 @@ async def update_my_profile(
     return await user_service.update_user_profile(current_user, data)
 
 
-@router.post("/me/image", summary="프로필 이미지 업로드")
-async def upload_my_profile_image(
-    current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
-) -> UserMeResponse:
-    return await user_service.update_profile_image(current_user, file)
-
-
 @router.delete("/me", summary="회원 탈퇴", status_code=status.HTTP_204_NO_CONTENT)
 async def withdraw(
     response: Response,
@@ -74,6 +67,13 @@ async def withdraw(
     response.delete_cookie(key="refresh_token", path="/")
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/me/image", summary="프로필 이미지 업로드")
+async def upload_my_profile_image(
+    current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
+) -> UserMeResponse:
+    return await user_service.update_profile_image(current_user, file)
 
 
 @router.get(
@@ -101,3 +101,24 @@ async def add_my_favorite_artist(
     data: FavoriteArtistCreate, current_user: User = Depends(get_current_user)
 ) -> FavoriteArtistResponse:
     return await user_service.add_follow_artist(current_user, data)
+
+
+@router.delete(
+    "/me/favorite-artists/{artist_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="사용자의 선호 아티스트 삭제",
+    description="현재 로그인한 사용자가 팔로우 중인 특정 아티스트를 목록에서 삭제합니다.",
+    responses={
+        204: {"description": "삭제 성공"},
+        401: {"description": "인증되지 않은 사용자"},
+        404: {"description": "팔로우 중인 아티스트(ID: {artist_id})를 찾을 수 없습니다."},
+    },
+)
+async def unfollow_artist(
+    artist_id: int,
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """
+    선호 아티스트(팔로우)를 취소합니다.
+    """
+    return await user_service.remove_follow_artist(current_user, artist_id)

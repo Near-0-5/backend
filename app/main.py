@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
+from fastadmin import fastapi_app as admin_app
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise import Tortoise
 
@@ -62,6 +63,8 @@ app.add_middleware(
 # v1 라우터 조립(도메인 라우터는 app/api/router.py에서 관리)
 app.include_router(api_router)
 
+# 어드민 라우터 마운트
+app.mount("/admin", admin_app)
 
 @app.get("/health")
 async def health() -> dict[str, bool]:

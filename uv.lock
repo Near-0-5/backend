@@ -214,6 +214,15 @@ wheels = [
 ]
 
 [[package]]
+name = "asgiref"
+version = "3.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/b9/4db2509eabd14b4a8c71d1b24c8d5734c52b8560a7b1e1a8b56c8d25568b/asgiref-3.11.0.tar.gz", hash = "sha256:13acff32519542a1736223fb79a715acdebe24286d98e8b164a73085f40da2c4", size = 37969, upload-time = "2025-11-19T15:32:20.106Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/be/317c2c55b8bbec407257d45f5c8d1b6867abc76d12043f2d3d58c538a4ea/asgiref-3.11.0-py3-none-any.whl", hash = "sha256:1db9021efadb0d9512ce8ffaf72fcef601c7b73a8807a1bb2ef143dc6b14846d", size = 24096, upload-time = "2025-11-19T15:32:19.004Z" },
+]
+
+[[package]]
 name = "asyncclick"
 version = "8.3.0.7"
 source = { registry = "https://pypi.org/simple" }
@@ -639,6 +648,27 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/61/7b/35cbccb7effc5d7e40f4c55e2b79399e1853041997fcda15c9ff160abba0/dictdiffer-0.9.0.tar.gz", hash = "sha256:17bacf5fbfe613ccf1b6d512bd766e6b21fb798822a133aa86098b8ac9997578", size = 31513, upload-time = "2021-07-22T13:24:29.276Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/47/ef/4cb333825d10317a36a1154341ba37e6e9c087bac99c1990ef07ffdb376f/dictdiffer-0.9.0-py2.py3-none-any.whl", hash = "sha256:442bfc693cfcadaf46674575d2eba1c53b42f5e404218ca2c2ff549f2df56595", size = 16754, upload-time = "2021-07-22T13:24:26.783Z" },
+]
+
+[[package]]
+name = "fastadmin"
+version = "0.2.22"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asgiref" },
+    { name = "pyjwt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/50/2a/e5443dbf1eba8d9799862b87edcb5a8e3c8d837923aa6617222ce8f5747b/fastadmin-0.2.22.tar.gz", hash = "sha256:51703a9e0a892ce2baeceb43cafef7f5ecbbc70ee17dd3f93f25277f81bdcbe0", size = 1660674, upload-time = "2025-04-22T11:14:43.391Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/80/26/cb8393ce0c179c29b15a7ce214b22d798a547f505f4c4b0b0a11a580f2c6/fastadmin-0.2.22-py3-none-any.whl", hash = "sha256:4e8e1341a5097d9da7f2a8c5b925de8bf16253822e7b857a5d430d3b026251b8", size = 1679535, upload-time = "2025-04-22T11:14:41.578Z" },
+]
+
+[package.optional-dependencies]
+fastapi = [
+    { name = "fastapi" },
+]
+tortoise-orm = [
+    { name = "tortoise-orm" },
 ]
 
 [[package]]
@@ -1283,6 +1313,7 @@ dependencies = [
     { name = "boto3" },
     { name = "celery" },
     { name = "cryptography" },
+    { name = "fastadmin", extra = ["fastapi", "tortoise-orm"] },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "kagglehub", extra = ["pandas-datasets"] },
@@ -1318,6 +1349,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.26,<1.43" },
     { name = "celery", specifier = ">=5.6.2" },
     { name = "cryptography", specifier = ">=46.0.3" },
+    { name = "fastadmin", extras = ["fastapi", "tortoise-orm"], specifier = ">=0.2.22" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "kagglehub", extras = ["pandas-datasets"], specifier = ">=0.4.1" },

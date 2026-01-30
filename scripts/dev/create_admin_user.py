@@ -23,7 +23,20 @@ async def main() -> None:
     if existing:
         updated_fields: list[str] = []
 
-        if not bcrypt.checkpw(password.encode("utf8"), existing.hash_password.encode("utf8")):
+        existing_hash = existing.hash_password or ""
+        needs_password_update = False
+
+        if not existing_hash:
+            needs_password_update = True
+        else:
+            try:
+                needs_password_update = not bcrypt.checkpw(
+                    password.encode("utf8"), existing_hash.encode("utf8")
+                )
+            except ValueError:
+                needs_password_update = True
+
+        if needs_password_update:
             existing.hash_password = hashed_password
             updated_fields.append("hash_password")
 

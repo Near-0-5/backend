@@ -32,7 +32,13 @@ class AdminUserAdmin(TortoiseModelAdmin):
         )
         if not obj:
             return None
-        if not bcrypt.checkpw(password.encode("utf8"), obj.hash_password.encode("utf8")):
+        stored_hash = obj.hash_password
+        if not stored_hash:
+            return None
+        try:
+            if not bcrypt.checkpw(password.encode("utf8"), stored_hash.encode("utf8")):
+                return None
+        except ValueError:
             return None
         return obj.id
 

@@ -105,6 +105,8 @@ jobs:
       ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      ADMIN_USER_MODEL: AdminUser
+      ADMIN_USER_MODEL_USERNAME_FIELD: username
 
       AUTO_SCHEMA: "1"
 

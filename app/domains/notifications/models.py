@@ -37,6 +37,9 @@ class UserNoti(models.Model):
     class Meta:
         table = "user_notis"
 
+    def __str__(self) -> str:
+        return f"user_id={self.user_id}"
+
 
 class ConcertNoti(models.Model):
     id = fields.BigIntField(primary_key=True)
@@ -69,3 +72,6 @@ class ConcertNoti(models.Model):
         table = "concert_notis"
         unique_together = (("user", "session", "kind"),)
         indexes = (("status", "send_at"),)
+
+    def __str__(self) -> str:
+        return f"user_id={self.user_id} session_id={self.session_id} kind={self.kind}"

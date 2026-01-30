@@ -41,6 +41,9 @@ class Artist(models.Model):
     class Meta:
         table = "artists"
 
+    def __str__(self) -> str:
+        return f"{self.stage_name} (id={self.id})"
+
 
 class Follow(models.Model):
     id = fields.BigIntField(primary_key=True)
@@ -55,3 +58,6 @@ class Follow(models.Model):
     class Meta:
         table = "follows"
         unique_together = (("user", "artist"),)
+
+    def __str__(self) -> str:
+        return f"user_id={self.user_id} artist_id={self.artist_id}"

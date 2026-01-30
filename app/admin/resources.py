@@ -1,10 +1,12 @@
-import bcrypt
+from typing import TYPE_CHECKING
 
-from fastadmin import TortoiseModelAdmin, register
+import bcrypt
+from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
+from fastadmin import register
 
 from app.admin.models import AdminUser
 from app.domains.artists.models import Artist, Follow
-from app.domains.notifications.models import ConcertNoti, UserNoti
+from app.domains.notifications.models import ConcertNoti
 from app.domains.streams.models import (
     Concert,
     ConcertArtist,
@@ -14,6 +16,13 @@ from app.domains.streams.models import (
     StreamVod,
 )
 from app.domains.users.models import User, UserCatFav, UserDeleteLog
+
+if TYPE_CHECKING:
+
+    class TortoiseModelAdmin:  # pragma: no cover
+        pass
+else:
+    TortoiseModelAdmin = _RuntimeTortoiseModelAdmin
 
 
 def _ko_plural(name: str) -> str:

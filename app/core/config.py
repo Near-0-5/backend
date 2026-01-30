@@ -4,8 +4,13 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# fastadmin 등에서 os.environ을 직접 읽으므로 .env를 먼저 로드
+ENV_FILE = f"envs/.{os.getenv('MODE', 'local')}.env"
+load_dotenv(ENV_FILE, override=False)
 
 # 시스템 타임존 설정
 os.environ["TZ"] = "Asia/Seoul"

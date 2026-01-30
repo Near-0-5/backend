@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise import Tortoise
 
+from app.admin.app import admin_app
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.tortoise_config import TORTOISE_ORM
@@ -61,6 +62,9 @@ app.add_middleware(
 
 # v1 라우터 조립(도메인 라우터는 app/api/router.py에서 관리)
 app.include_router(api_router)
+
+# 어드민 라우터 마운트
+app.mount("/admin", admin_app)
 
 
 @app.get("/health")

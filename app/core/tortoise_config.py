@@ -7,6 +7,7 @@ TORTOISE_ORM = {
     "apps": {
         "models": {
             "models": [
+                "app.admin.models",
                 "app.domains.users.models",
                 "app.domains.artists.models",
                 "app.domains.streams.models",

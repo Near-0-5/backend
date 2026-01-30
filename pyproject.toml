@@ -106,6 +106,7 @@ omit = [
     "app/core/tortoise_config.py",
     "app/main.py",
     "migrations/*",
+    "app/admin/*",
 ]
 
 [tool.coverage.html]

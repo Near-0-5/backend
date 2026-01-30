@@ -17,9 +17,11 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from tortoise import Tortoise
 
 from app.api.router import api_router
+from app.core.config import settings
 from app.core.tortoise_config import TORTOISE_ORM
 
 if TYPE_CHECKING:
@@ -47,6 +49,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="NEAR0.5 API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,  # 허용할 도메인 목록
+    allow_credentials=True,  # 쿠키(토큰) 포함 허용
+    allow_methods=["*"],  # GET, POST, DELETE 등 모든 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
+    expose_headers=["Content-Disposition", "Custom-Header"],  # 명시적으로 노출해야만 접근 가능
+)
 
 # v1 라우터 조립(도메인 라우터는 app/api/router.py에서 관리)
 app.include_router(api_router)

@@ -80,18 +80,12 @@ class NotificationItem(BaseModel):
 
     id: int = Field(description="알림 고유 ID")
     session_id: int = Field(description="연결된 스트리밍 세션 ID")
-    kind: NotiKind = Field(
-        description="알림 종류 (DAY_BEFORE/HOUR_1/MIN_30/START)"
-    )
+    kind: NotiKind = Field(description="알림 종류 (DAY_BEFORE/HOUR_1/MIN_30/START)")
     title: str = Field(description="알림 제목")
     message: str = Field(description="알림 본문")
     send_at: datetime = Field(description="발송 예정 시각 (UTC, ISO-8601)")
-    status: NotiStatus = Field(
-        description="발송 상태 (PENDING/PROCESSING/SENT/FAILED)"
-    )
-    sent_at: datetime | None = Field(
-        description="실제 발송 시각 (발송 전에는 null)"
-    )
+    status: NotiStatus = Field(description="발송 상태 (PENDING/PROCESSING/SENT/FAILED)")
+    sent_at: datetime | None = Field(description="실제 발송 시각 (발송 전에는 null)")
     created_at: datetime = Field(description="생성 시각 (UTC, ISO-8601)")
     updated_at: datetime = Field(description="마지막 변경 시각 (UTC, ISO-8601)")
 

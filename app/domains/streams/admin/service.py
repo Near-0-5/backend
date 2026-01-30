@@ -7,6 +7,7 @@ from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist
+from app.domains.notifications.service import notification_service
 from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
     ConcertDetailResponse,
@@ -443,6 +444,7 @@ class StreamAdminService:
             raise HTTPException(404, "해당 콘서트 세션을 찾을 수 없습니다.")
 
         channel = getattr(session, "stream_channel", None)
+        start_at_before = session.start_at
 
         # DB 수정
         update_dict = data.model_dump(exclude={"channel_config", "artist_ids"}, exclude_unset=True)
@@ -494,6 +496,9 @@ class StreamAdminService:
             await channel.save()
 
         await session.save()
+
+        if data.start_at is not None and data.start_at != start_at_before:
+            await notification_service.reschedule_session_notifications(session.id, session=session)
 
         # 업데이트된 정보로 다시 조회하여 반환
         return await self.get_session_admin_detail(session_id, user)

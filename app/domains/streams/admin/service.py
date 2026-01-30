@@ -7,6 +7,7 @@ from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist
+from app.domains.notifications.service import notification_service
 from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
     ConcertDetailResponse,
@@ -26,7 +27,6 @@ from app.domains.streams.models import (
     StreamChannel,
     StreamStatus,
 )
-from app.domains.notifications.service import notification_service
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
 from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider

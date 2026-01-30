@@ -20,9 +20,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise import Tortoise
 
-from app.core.config import settings
 from app.admin.app import admin_app
 from app.api.router import api_router
+from app.core.config import settings
 from app.core.tortoise_config import TORTOISE_ORM
 
 if TYPE_CHECKING:
@@ -65,6 +65,7 @@ app.include_router(api_router)
 
 # 어드민 라우터 마운트
 app.mount("/admin", admin_app)
+
 
 @app.get("/health")
 async def health() -> dict[str, bool]:

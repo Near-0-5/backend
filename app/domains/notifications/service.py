@@ -168,6 +168,23 @@ class NotificationService:
 
         return total_created
 
+    async def reschedule_session_notifications(
+        self, session_id: int, *, session: ConcertSession | None = None
+    ) -> int:
+        """기존 예정 알림(PENDING/FAILED) 삭제 후 새 스케줄 생성."""
+        if session is None:
+            session = await ConcertSession.get(id=session_id)
+        await session.fetch_related("concert", "lineup")
+
+        if session.status == StreamStatus.ENDED:
+            return 0
+
+        await ConcertNoti.filter(
+            session_id=session.id, status__in=[NotiStatus.PENDING, NotiStatus.FAILED]
+        ).delete()
+
+        return await self.schedule_session_notifications(session.id, session=session)
+
     async def schedule_upcoming_sessions(self, hours_ahead: int = 24) -> int:
         """지금부터 N시간 이내 시작하는 세션들의 알림을 생성."""
         now = now_kst()

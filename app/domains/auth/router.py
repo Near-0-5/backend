@@ -84,7 +84,7 @@ async def kakao_callback(response: Response, code: str = Query(...)) -> Redirect
         value=token_data.refresh_token,
         httponly=True,
         secure=True,  # HTTPS에서만 작동 True
-        samesite="lax",
+        samesite="none",
         path="/",  # 삭제할거면 전체에서 삭제
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
     )
@@ -115,7 +115,7 @@ async def refresh_token(
         value=token_data.refresh_token,
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
         path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
     )

@@ -99,8 +99,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ap-northeast-2
       IVS_PLAYBACK_PRIVATE_KEY_B64: ${{ secrets.IVS_PLAYBACK_PRIVATE_KEY_B64 }}
-      S3_RECORDING_BUCKET: my-concert-ivs-recordings
+      S3_RECORDING_BUCKET: ${{ secrets.S3_RECORDING_BUCKET }}
       IMAGES_BUCKET: ${{ secrets.IMAGES_BUCKET }}
+      IVS_WEBHOOK_SECRET: ${{ secrets.IVS_WEBHOOK_SECRET }}
 
       ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
       ADMIN_USERNAME: admin
@@ -112,12 +113,12 @@ jobs:
 
       ACCESS_TOKEN_EXPIRE_MINUTES: 15
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      KAKAO_REST_API_KEY: "aa01acb6e04a9e4c04543d5834ee68ae"
-      KAKAO_REDIRECT_URI: "http://52.78.124.109:8000/auth/kakao/callback"
-      KAKAO_CLIENT_SECRET: "GPFeAF5PbNB41dSF2iTBdwSKoD1krunt"
-      KAKAO_ADMIN_KEY: "be42a537604c50c5673929aa78daa7e5"
-      CALLBACK_REDIRECT_URL: "http://52.78.124.109:8000/docs"
-      CORS_ORIGINS: '["https://near-0-5.vercel.app", "http://localhost:5173", "http://localhost:3000"]'
+      KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+      KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+      KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+      KAKAO_ADMIN_KEY: ${{ secrets.KAKAO_ADMIN_KEY }}
+      CALLBACK_REDIRECT_URL: ${{ secrets.CALLBACK_REDIRECT_URL }}
+      CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
 
     steps:
       - name: Checkout code

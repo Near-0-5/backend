@@ -170,6 +170,7 @@ async def stream_monitor_page(
     current_admin: User = Depends(get_admin_user),
 ) -> HTMLResponse:
     return templates.TemplateResponse(
+        request,
         "stream_monitor.html",
-        {"request": request, "session_id": session_id, "is_admin": current_admin.is_superuser},
+        {"session_id": session_id, "is_admin": current_admin.is_superuser},
     )

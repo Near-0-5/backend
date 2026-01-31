@@ -34,6 +34,16 @@ def schedule_session_notifications(session_id: int) -> int:
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.domains.notifications.tasks.reschedule_session_notifications"
+)
+def reschedule_session_notifications(session_id: int) -> int:
+    """세션 변경 시 기존 알림 취소 후 재스케줄링"""
+    return asyncio.run(
+        _run_with_db(notification_service.reschedule_session_notifications(session_id))
+    )
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
     name="app.domains.notifications.tasks.schedule_upcoming_session_notifications"
 )
 def schedule_upcoming_session_notifications(hours_ahead: int = 24) -> int:

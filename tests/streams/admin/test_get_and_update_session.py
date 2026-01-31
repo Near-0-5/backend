@@ -52,7 +52,7 @@ async def session_with_channel(concert):
     session = await ConcertSession.create(
         concert=concert,
         session_name="1회차",
-        start_at=datetime.utcnow() + timedelta(hours=1),
+        start_at=datetime.now() + timedelta(hours=1),
         status=StreamStatus.READY,
         access_level=AccessLevel.PUBLIC,
     )

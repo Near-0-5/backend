@@ -118,7 +118,7 @@ jobs:
       KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
       KAKAO_ADMIN_KEY: ${{ secrets.KAKAO_ADMIN_KEY }}
       CALLBACK_REDIRECT_URL: ${{ secrets.CALLBACK_REDIRECT_URL }}
-      CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+      CORS_ORIGINS: '${{ secrets.CORS_ORIGINS }}'
 
     steps:
       - name: Checkout code

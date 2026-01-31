@@ -4,10 +4,15 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException, UploadFile
 from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
 
+from app.core.config import now_kst
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist
-from app.domains.notifications.service import notification_service
+from app.domains.notifications.tasks import (
+    dispatch_due_notifications,
+    reschedule_session_notifications,
+    schedule_session_notifications,
+)
 from app.domains.streams.admin.schemas import (
     ConcertCreateRequest,
     ConcertDetailResponse,
@@ -18,6 +23,7 @@ from app.domains.streams.admin.schemas import (
     StreamIngestInfo,
     StreamIngestResponse,
     StreamLiveMetrics,
+    StreamWebhookPayload,
 )
 from app.domains.streams.models import (
     AccessLevel,
@@ -25,6 +31,7 @@ from app.domains.streams.models import (
     ConcertArtist,
     ConcertSession,
     StreamChannel,
+    StreamSession,
     StreamStatus,
 )
 from app.domains.streams.permissions import StreamPermission
@@ -39,6 +46,7 @@ class StreamAdminService:
         self.playback_provider = playback_provider
         self.image_resizer = ImageResizer()
 
+    # ================================ 콘서트 관리 ====================================
     async def create_concert(self, data: ConcertCreateRequest, user: User) -> Concert:
         """
         [Admin] 콘서트 생성
@@ -158,6 +166,54 @@ class StreamAdminService:
         # DB 삭제(cascade)
         await concert.delete()
 
+    # ================================ IVS 상태 웹훅 ===================================
+    async def handle_ivs_webhook(self, payload: StreamWebhookPayload) -> None:
+        detail = payload.detail
+        event_name = detail.event_name  # "Stream Start" | "Stream End"
+        channel_arn = detail.channel_arn
+        stream_id = detail.stream_id
+
+        # 채널 찾기
+        channel = await StreamChannel.get_or_none(channel_arn=channel_arn).prefetch_related(
+            "session"
+        )
+        if not channel:
+            return  # 알 수 없는 채널 무시
+
+        session: ConcertSession = channel.session
+        now = now_kst()
+
+        # 방송 시작 (Stream Start)
+        if event_name == "Stream Start":
+            # 상태 변경
+            session.status = StreamStatus.LIVE
+            await session.save(update_fields=["status"])
+
+            # 스트리밍 이력 생성
+            if stream_id:
+                await StreamSession.create(session=session, stream_id=stream_id, started_at=now)
+
+            # 라이브 시작 알림 즉시 발송 트리거
+            dispatch_due_notifications.delay()
+
+        # 방송 종료 (Stream End)
+        elif event_name == "Stream End":
+            # 종료 상태 처리 (예정 종료 시간이 지났으면 ENDED, 아니면 READY)
+            if session.end_at and now > session.end_at:
+                session.status = StreamStatus.ENDED
+            else:
+                session.status = StreamStatus.READY
+
+            await session.save(update_fields=["status"])
+
+            # 이력 종료 시간 기록
+            if stream_id:
+                stream_session = await StreamSession.get_or_none(stream_id=stream_id)
+                if stream_session:
+                    stream_session.ended_at = now
+                    await stream_session.save(update_fields=["ended_at"])
+
+    # ================================ 세션 관리 =====================================
     async def create_session_with_infrastructure(
         self, concert_id: int, data: SessionCreateRequest, user: User
     ) -> SessionResponse:
@@ -245,6 +301,8 @@ class StreamAdminService:
             raise HTTPException(500, f"IVS 채널 생성 실패: {str(e)}") from e
 
         from app.domains.streams.admin.schemas import IVSChannelSummary
+
+        schedule_session_notifications.delay(session.id)
 
         return SessionResponse(
             id=session.id,
@@ -498,7 +556,7 @@ class StreamAdminService:
         await session.save()
 
         if data.start_at is not None and data.start_at != start_at_before:
-            await notification_service.reschedule_session_notifications(session.id, session=session)
+            reschedule_session_notifications.delay(session.id)
 
         # 업데이트된 정보로 다시 조회하여 반환
         return await self.get_session_admin_detail(session_id, user)

@@ -151,3 +151,27 @@ class StreamIngestResponse(BaseModel):
     playback_url: str
     playback_token: str | None = None
     live_metrics: StreamLiveMetrics | None = None
+
+
+# ========================= IVS 상태 동기회 웹훅 =========================
+class IVSDetail(BaseModel):
+    channel_name: str | None = Field(None, alias="channel_name")
+    stream_id: str | None = Field(None, alias="stream_id")
+    channel_arn: str | None = Field(..., alias="channel_arn")
+    event_name: str | None = Field(..., alias="event_name")  # Stream Start | Stream End
+
+
+class IVSEvent(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    version: str
+    id: str
+    detail_type: str = Field(..., alias="detail-type")  # IVS Stream State Change
+    source: str
+    time: str
+    region: str
+    resources: list[str]
+    detail: IVSDetail
+
+
+class StreamWebhookPayload(IVSEvent):
+    pass

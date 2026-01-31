@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IVS Events to FastAPI Webhook via EventBridge
+
+Parameters:
+  # CloudFront 도메인 주소와 FastAPI 웹훅 경로
+  WebhookUrl:
+    Type: String
+    Default: "https://d15qsadcdtxaqn.cloudfront.net/api/v1/streams/webhook"
+  IVSWebhookSecret:
+    Type: String
+    NoEcho: True
+    Description: "Enter the secret key for X-API-Key to validate requests in FastAPI"
+
+Resources:
+  # EventBridge가 웹훅을 호출할 수 있는 권한(Role)
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EventBridgeInvokeApi
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:api-destination/*"
+
+  # 웹훅 전송 대상 설정 (FastAPI 서버 주소)
+  MyApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: near05-webhook
+      ConnectionArn: !GetAtt MyEventConnection.Arn
+      InvocationEndpoint: !Ref WebhookUrl
+      HttpMethod: POST
+
+  # 인증 설정 (FastAPI에서 보안 확인용으로 쓸 수 있는 헤더)
+  MyEventConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: near05-webhook-connection
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: "X-API-Key"
+          ApiKeyValue: !Ref IVSWebhookSecret
+
+  # IVS 상태 변경 감지 규칙 (방송 시작/종료 시 트리거)
+  IVSStatusRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: near05-ivs-status-rule
+      EventPattern:
+        source:
+          - aws.ivs
+        detail-type:
+          - IVS Channel State Change
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MyApiDestination.Arn
+          Id: FastAPIWebhookTarget
+          RoleArn: !GetAtt EventBridgeRole.Arn

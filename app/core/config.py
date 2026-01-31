@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     IVS_PLAYBACK_PRIVATE_KEY_B64: str = Field(..., validation_alias="IVS_PLAYBACK_PRIVATE_KEY_B64")
     S3_RECORDING_BUCKET: str
     IMAGES_BUCKET: str
+    IVS_WEBHOOK_SECRET: str
 
     # social_login
     KAKAO_REST_API_KEY: str

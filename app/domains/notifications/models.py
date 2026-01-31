@@ -52,14 +52,14 @@ class ConcertNoti(models.Model):
         user_id: int
         session_id: int
 
-    kind = fields.CharEnumField(NotiKind, index=True)
+    kind = fields.CharEnumField(NotiKind, db_index=True)
 
     title = fields.CharField(max_length=100)
     message = fields.TextField()
 
-    send_at = fields.DatetimeField(index=True)
+    send_at = fields.DatetimeField(db_index=True)
 
-    status = fields.CharEnumField(NotiStatus, default=NotiStatus.PENDING, index=True)
+    status = fields.CharEnumField(NotiStatus, default=NotiStatus.PENDING, db_index=True)
     sent_at = fields.DatetimeField(null=True)
 
     created_at = fields.DatetimeField(auto_now_add=True)

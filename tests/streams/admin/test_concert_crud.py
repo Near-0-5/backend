@@ -1,10 +1,13 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from httpx import AsyncClient
 
 from app.domains.streams.admin.schemas import ConcertCreateRequest
 from app.domains.streams.admin.service import StreamAdminService
+from app.domains.streams.deps import get_admin_user
 from app.domains.streams.models import CategoryType
+from app.main import app
 
 
 @pytest.fixture
@@ -111,3 +114,65 @@ class TestConcertBasicCRUD:
                 "path/to/img.jpg"
             )
             mock_concert.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    class TestConcertRouter:
+        @pytest.fixture(autouse=True)
+        def setup_method(self, mock_user_admin):
+            # get_admin_user가 호출될 때 항상 mock_user_admin을 반환하도록 설정
+            app.dependency_overrides[get_admin_user] = lambda: mock_user_admin
+            yield
+            # 테스트 종료 후 오버라이드 제거
+            app.dependency_overrides.clear()
+
+        # 목록 조회 테스트 (Header 검증 포함)
+        async def test_list_concerts_router(self, client: AsyncClient):
+            mock_concert = MagicMock(
+                id=1,
+                title="Test",
+                category=CategoryType.KPOP,
+                description="설명",
+                thumbnail_url="https://example.com/image.jpg",
+            )
+            mock_concert.thumbnailUrl = "https://example.com/image.jpg"
+
+            mock_concerts = [mock_concert]  # 내부 속성 접근을 위해 MagicMock 사용
+
+            with patch(
+                "app.domains.streams.admin.service.StreamAdminService.list_concerts",
+                new_callable=AsyncMock,
+            ) as mock_list:
+                mock_list.return_value = (mock_concerts, "2")
+
+                response = await client.get("/api/v1/admin/concerts")
+
+                assert response.status_code == 200
+                assert response.headers["X-Next-Cursor"] == "2"
+
+        # 썸네일 업로드 테스트
+        async def test_update_thumbnail_router(self, client: AsyncClient):
+            concert_id = 1
+            file_content = b"fake image content"
+            files = {"thumbnail_file": ("test.jpg", file_content, "image/jpeg")}
+
+            returned_concert = MagicMock(
+                id=concert_id,
+                title="Test",
+                category=CategoryType.KPOP,
+                description="Description",
+                thumbnail_url="http://path/to/thumb.jpg",
+                thumbnailUrl="http://path/to/thumb.jpg",  # alias 대응
+            )
+
+            with patch(
+                "app.domains.streams.admin.service.StreamAdminService.update_concert_thumbnail",
+                new_callable=AsyncMock,
+            ) as mock_thumb:
+                mock_thumb.return_value = returned_concert
+
+                response = await client.patch(
+                    f"/api/v1/admin/concerts/{concert_id}/thumbnail",
+                    files=files,
+                )
+
+                assert response.status_code == 200

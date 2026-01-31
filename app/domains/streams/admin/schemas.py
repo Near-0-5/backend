@@ -162,9 +162,10 @@ class IVSDetail(BaseModel):
 
 
 class IVSEvent(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     version: str
     id: str
-    detail_type: str = Field(..., alias="detail_type")  # IVS Stream State Change
+    detail_type: str = Field(..., alias="detail-type")  # IVS Stream State Change
     source: str
     time: str
     region: str

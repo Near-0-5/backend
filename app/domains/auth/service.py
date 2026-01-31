@@ -90,6 +90,9 @@ class AuthService:
         response.delete_cookie(
             key="refresh_token",
             path="/",
+            samesite="none",
+            secure=True,
+            httponly=True,
         )
 
 

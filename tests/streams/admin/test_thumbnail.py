@@ -105,7 +105,7 @@ class TestStreamAdminCoverage:
             ),
         ):
             files = {"thumbnail_file": ("test.jpg", b"data", "image/jpeg")}
-            res = await client.patch("/api/v1/admin/streams/concerts/99/thumbnail", files=files)
+            res = await client.patch("/api/v1/admin/concerts/99/thumbnail", files=files)
             assert res.status_code == 200
             assert mock_concert.thumbnail_url == "new.png"
 

@@ -66,7 +66,7 @@ class TestStreamRouter:
 
                 # create concert
                 res = await client.post(
-                    "/api/v1/admin/streams/concerts",
+                    "/api/v1/admin/concerts",
                     json={
                         "title": "Test Concert",
                         "description": "Test Description",

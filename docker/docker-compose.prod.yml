@@ -5,10 +5,45 @@ services:
     environment:
       - MODE=prod
       - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - UV_PROJECT_ENVIRONMENT=/tmp/venv-api
     env_file:
       - ../envs/.prod.env
     ports:
       - "8000:8000"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [ws]
+    restart: always
+
+  celery-worker:
+    container_name: celery-worker-prod
+    image: 104266513708.dkr.ecr.ap-northeast-2.amazonaws.com/near05-api:${IMAGE_TAG}
+    environment:
+      - MODE=prod
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - UV_PROJECT_ENVIRONMENT=/tmp/venv-worker
+    env_file:
+      - ../envs/.prod.env
+    command: >
+      sh -c "uv run celery -A app.tasks.celery_app worker -l info"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [ws]
+    restart: always
+
+  celery-beat:
+    container_name: celery-beat-prod
+    image: 104266513708.dkr.ecr.ap-northeast-2.amazonaws.com/near05-api:${IMAGE_TAG}
+    environment:
+      - MODE=prod
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - UV_PROJECT_ENVIRONMENT=/tmp/venv-beat
+    env_file:
+      - ../envs/.prod.env
+    command: >
+      sh -c "mkdir -p /app/.cache && uv run celery -A app.tasks.celery_app beat -l info --schedule /app/.cache/celerybeat-schedule"
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }

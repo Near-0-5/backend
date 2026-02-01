@@ -60,4 +60,6 @@ class Follow(models.Model):
         unique_together = (("user", "artist"),)
 
     def __str__(self) -> str:
-        return f"user_id={self.user.id} artist_id={self.artist.id}"
+        user_id = getattr(self, "user_id", None)
+        artist_id = getattr(self, "artist_id", None)
+        return f"user_id={user_id} artist_id={artist_id}"

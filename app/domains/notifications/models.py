@@ -38,7 +38,8 @@ class UserNoti(models.Model):
         table = "user_notis"
 
     def __str__(self) -> str:
-        return f"user_id={self.user.id}"
+        user_id = getattr(self, "user_id", None)
+        return f"user_id={user_id}"
 
 
 class ConcertNoti(models.Model):
@@ -74,4 +75,6 @@ class ConcertNoti(models.Model):
         indexes = (("status", "send_at"),)
 
     def __str__(self) -> str:
-        return f"user_id={self.user.id} session_id={self.session.id} kind={self.kind}"
+        user_id = getattr(self, "user_id", None)
+        session_id = getattr(self, "session_id", None)
+        return f"user_id={user_id} session_id={session_id} kind={self.kind}"

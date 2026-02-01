@@ -57,6 +57,9 @@ class User(models.Model):
     class Meta:
         table = "users"
 
+    def __str__(self) -> str:
+        return f"{self.nickname} (id={self.id})"
+
 
 class UserCatFav(models.Model):
     id = fields.BigIntField(primary_key=True)
@@ -69,6 +72,10 @@ class UserCatFav(models.Model):
     class Meta:
         table = "user_cat_favs"
         unique_together = (("user", "category"),)  # 동일 유저 동일 카테고리 중복 추가 방지
+
+    def __str__(self) -> str:
+        user_id = getattr(self, "user_id", None)
+        return f"user_id={user_id} category={self.category}"
 
 
 class UserDeleteLog(models.Model):
@@ -84,3 +91,6 @@ class UserDeleteLog(models.Model):
 
     class Meta:
         table = "users_delete_logs"
+
+    def __str__(self) -> str:
+        return f"{self.email or 'unknown'} (id={self.id})"

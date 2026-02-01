@@ -93,6 +93,9 @@ class Concert(models.Model):
     class Meta:
         table = "concerts"
 
+    def __str__(self) -> str:
+        return f"{self.title} (id={self.id})"
+
 
 class ConcertSession(models.Model):
     """
@@ -145,6 +148,10 @@ class ConcertSession(models.Model):
     class Meta:
         table = "concert_sessions"
 
+    def __str__(self) -> str:
+        concert_id = getattr(self, "concert_id", None)
+        return f"{self.session_name} (id={self.id}, concert_id={concert_id})"
+
 
 class ConcertArtist(models.Model):
     """
@@ -173,6 +180,11 @@ class ConcertArtist(models.Model):
     class Meta:
         table = "concert_artists"
         unique_together = ("artist", "session")  # 중복 출연 등록 방지
+
+    def __str__(self) -> str:
+        session_id = getattr(self, "session_id", None)
+        artist_id = getattr(self, "artist_id", None)
+        return f"session_id={session_id} artist_id={artist_id}"
 
 
 class StreamChannel(models.Model):
@@ -225,6 +237,10 @@ class StreamChannel(models.Model):
     class Meta:
         table = "stream_channels"
 
+    def __str__(self) -> str:
+        session_id = getattr(self, "session_id", None)
+        return f"session_id={session_id} (id={self.id})"
+
     # 스트림 키를 대칭키 방식으로 암호화해서 DB에 저장
     def set_stream_key(self, plain_key: str) -> None:
         f = Fernet(settings.STREAM_KEY_ENCRYPTION_KEY.encode())
@@ -258,6 +274,9 @@ class StreamSession(models.Model):
     class Meta:
         table = "stream_sessions"
 
+    def __str__(self) -> str:
+        return f"{self.stream_id} (id={self.id})"
+
 
 class StreamVod(models.Model):
     """
@@ -290,6 +309,10 @@ class StreamVod(models.Model):
 
     class Meta:
         table = "stream_vods"
+
+    def __str__(self) -> str:
+        session_id = getattr(self, "session_id", None)
+        return f"session_id={session_id} (id={self.id})"
 
     @property
     def full_s3_path(self) -> str:

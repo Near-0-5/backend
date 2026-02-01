@@ -12,3 +12,6 @@ class AdminUser(models.Model):
 
     class Meta:
         table = "admin_users"
+
+    def __str__(self) -> str:
+        return f"{self.username} (id={self.id})"

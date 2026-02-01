@@ -13,9 +13,44 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.core.utils.permissions import AdminPermission
+from app.core.security import ALGORITHM, verify_cognito_token
 from app.domains.users.models import User
 
 security = HTTPBearer()
+
+
+async def get_current_user_by_cognito(
+    auth: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+) -> User:
+    """
+    헤더의 Cognito ID Token을 검증하여 유저를 반환합니다.
+    (자체 JWT 대신 Cognito 토큰을 직접 쓸 때 사용
+    create_access_token으로 직접 만든 토큰을 검증할 때는
+    기존의 get_current_user를 사용)
+    """
+    token = auth.credentials  # 헤더의 Bearer 토큰
+
+    try:
+        # Cognito 토큰 검증 (RS256)
+        payload = await verify_cognito_token(token)
+
+        # 페이로드에서 고유 식별자(sub) 추출
+        cognito_sub = payload.get("sub")
+        if not cognito_sub:
+            raise HTTPException(status_code=401, detail="Token payload missing 'sub'")
+
+    except Exception as e:
+        # 검증 실패 시 401 에러 반환
+        raise HTTPException(status_code=401, detail=f"Invalid Cognito token: {str(e)}")
+
+        # DB에서 해당 provider_id(sub)를 가진 유저 조회
+    user = await User.get_or_none(provider_id=cognito_sub)
+    if not user:
+        raise HTTPException(
+            status_code=404, detail="Cognito로 인증되었으나 DB에 등록되지 않은 유저입니다"
+        )
+
+    return user
 
 
 async def get_current_user(

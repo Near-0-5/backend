@@ -26,7 +26,7 @@ dependencies = [
     "redis[hiredis]>=7.1.0",
     "tortoise-orm>=0.25.3",
     "types-redis>=4.6.0.20241004",
-    "uvicorn>=0.40.0",
+    "uvicorn[standard]>=0.40.0",
 ]
 
 [dependency-groups]

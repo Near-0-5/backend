@@ -77,7 +77,13 @@ class Settings(BaseSettings):
     ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC: int = 600  # 10 min
     IVS_PLAYBACK_TOKEN_EXPIRATION_SEC: int = 3600  # 60 min
 
-    # social_login
+    # AWS COGNITO
+    COGNITO_CLIENT_ID: str
+    COGNITO_CLIENT_SECRET: str
+    COGNITO_DOMAIN: str
+    COGNITO_USER_POOL_ID: str
+
+    # social_login (KAKAO_REDIRECT_URI 제외 삭제 필요)
     KAKAO_REST_API_KEY: str
     KAKAO_REDIRECT_URI: str
     KAKAO_CLIENT_SECRET: str
@@ -102,6 +108,10 @@ class Settings(BaseSettings):
             return base64.b64decode(self.IVS_PLAYBACK_PRIVATE_KEY_B64).decode("utf-8")
         except Exception as e:
             raise RuntimeError(f"IVS PRIVATE KEY 디코딩 실패: {e}") from e
+
+    @property
+    def COGNITO_JWKS_URL(self) -> str:
+        return f"https://cognito-idp.{self.AWS_REGION}.amazonaws.com/{self.COGNITO_USER_POOL_ID}/.well-known/jwks.json"
 
 
 settings = Settings()

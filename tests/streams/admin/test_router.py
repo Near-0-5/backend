@@ -191,8 +191,7 @@ class TestStreamRouter:
                     mock_stop.return_value = None
 
                     res = await client.post("/api/v1/admin/streams/sessions/1/stop")
-                    assert res.status_code == 200
-                    assert "종료" in res.json()["message"]
+                    assert res.status_code == 204
 
             finally:
                 app.dependency_overrides.clear()

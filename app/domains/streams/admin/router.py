@@ -49,7 +49,7 @@ async def create_concert_stream(
 
 @router.get(
     "/sessions",
-    response_model=list[SessionResponse],
+    response_model=SessionListResponse,
     summary="콘서트 세션 목록 조회",
     description="모든 콘서트 세션을 조회합니다. \
     AWS IVS의 현재 라이브 상태를 실시간으로 확인하여 목록에 반영합니다.",

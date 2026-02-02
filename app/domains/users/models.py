@@ -12,9 +12,9 @@ if TYPE_CHECKING:
 
 # 소셜 제공자
 class ProviderChoice(str, Enum):
-    KAKAO = "KAKAO"
-    GOOGLE = "GOOGLE"
-    NAVER = "NAVER"
+    KAKAO = "Kakao"
+    GOOGLE = "Google"
+    NAVER = "Naver"
 
 
 # 성별

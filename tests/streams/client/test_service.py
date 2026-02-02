@@ -93,7 +93,7 @@ class TestStreamService:
             mock_pb.sign_playback_token.assert_called_with(
                 channel_arn="arn:ivs:test2",  # DB에 저장한 값
                 viewer_id="1",
-                duration_sec=3600,
+                duration_sec=600,
             )
 
     @pytest.mark.asyncio

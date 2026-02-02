@@ -73,7 +73,7 @@ class StreamUserService:
         new_token = self.playback_provider.sign_playback_token(
             channel_arn=session.stream_channel.channel_arn,
             viewer_id=str(user.id),
-            duration_sec=3600,  # 1시간 유효
+            duration_sec=600,  # 10분으로 바꿈
         )
         refreshed_playback_url = f"{channel.playback_url}?token={new_token}"
 

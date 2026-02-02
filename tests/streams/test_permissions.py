@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
+from app.core.utils.permissions import AdminPermission
 from app.domains.streams.models import AccessLevel
 from app.domains.streams.permissions import StreamPermission
 
@@ -12,12 +13,12 @@ class TestStreamPermission:
     async def test_must_be_admin(self):
         # 관리자 통과
         admin = MagicMock(is_superuser=True)
-        StreamPermission.must_be_admin(admin)
+        AdminPermission.must_be_admin(admin)
 
         # 일반인 거부
         user = MagicMock(is_superuser=False)
         with pytest.raises(HTTPException) as exc:
-            StreamPermission.must_be_admin(user)
+            AdminPermission.must_be_admin(user)
         assert exc.value.status_code == 403
 
     async def test_verify_playback_access_logic(self):

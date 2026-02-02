@@ -4,9 +4,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.config import now_kst
+from app.domains.concerts.models import Concert
 from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus
 from app.domains.notifications.tasks import _dispatch_due_notifications
-from app.domains.streams.models import Concert, ConcertSession, StreamStatus
+from app.domains.streams.models import ConcertSession, StreamStatus
 from app.domains.users.models import ProviderChoice, User
 
 

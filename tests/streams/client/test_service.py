@@ -5,10 +5,9 @@ import pytest
 from fastapi import HTTPException
 
 from app.core.config import settings
+from app.domains.concerts.models import CategoryType, Concert
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.models import (
-    CategoryType,
-    Concert,
     ConcertSession,
     StreamChannel,
     StreamStatus,

@@ -29,7 +29,7 @@ class ChannelConfig(BaseModel):
 class StreamLiveMetrics(BaseModel):
     model_config = COMMON_CONFIG
     health: str = Field(..., description="스트림 건강 상태 (HEALTHY, STARVING, UNKNOWN)")
-    viewer_count: int = Field(..., description="현재 동시 시청자 수")
+    viewer_count: int | None = Field(..., description="현재 동시 시청자 수")
     start_time: datetime | None = Field(None, description="방송 시작 시각")
     state: str = Field(..., description="LIVE 상태")
 

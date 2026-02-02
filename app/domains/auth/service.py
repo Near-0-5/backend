@@ -1,9 +1,13 @@
 import uuid
 from datetime import datetime
+from io import BytesIO
 
+import httpx
 from fastapi import Response
 
-from app.core.security import create_access_token, create_refresh_token
+from app.core.config import settings
+from app.core.security import create_access_token, create_refresh_token, verify_cognito_token
+from app.core.utils.image_resizer import ImageResizer
 from app.domains.auth.schemas import TokenResponse
 from app.domains.notifications.models import UserNoti
 from app.domains.users.models import ProviderChoice, User
@@ -11,6 +15,102 @@ from app.integrations.kakao import kakao_client
 
 
 class AuthService:
+    def __init__(self) -> None:
+        self.image_resizer = ImageResizer()
+
+    async def _process_and_upload_image(self, user: User, image_url: str) -> str:
+        """
+        프로필 URL을 다운로드하여 리사이징 후 S3에 업로드합니다.
+        """
+        if not image_url:
+            return ""
+
+        try:
+            async with httpx.AsyncClient() as client:
+                img_res = await client.get(image_url)
+                if img_res.status_code != 200:
+                    return image_url  # 실패 시 원본 유지
+
+                # 메모리에 이미지 로드
+                image_data = BytesIO(img_res.content)
+
+                # UserService와 동일한 경로 및 사이즈 설정
+                path_prefix = f"users/{user.id}/profile"
+                sizes = (100, 300, 640)
+
+                # 리사이징 및 업로드
+                urls = await self.image_resizer.upload_square_resizes(
+                    image_file=image_data, sizes=sizes, path_prefix=path_prefix
+                )
+
+                # 중간 사이즈(300px)를 기본 URL로 반환
+                return urls.get("300", image_url)
+        except Exception:
+            return image_url
+
+    async def process_cognito_login(self, code: str) -> TokenResponse:
+        # Cognito Token Endpoint로 code를 보내 토큰들을 가져옴
+        async with httpx.AsyncClient() as client:
+            token_url = f"{settings.COGNITO_DOMAIN}/oauth2/token"
+            data = {
+                "grant_type": "authorization_code",
+                "client_id": settings.COGNITO_CLIENT_ID,
+                "client_secret": settings.COGNITO_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": settings.KAKAO_REDIRECT_URI,
+            }
+            res = await client.post(token_url, data=data)
+            tokens = res.json()
+
+        id_token = tokens.get("id_token")
+
+        # 토큰 검증
+        payload = await verify_cognito_token(id_token)
+
+        # payload에서 발급자(iss)를 확인하여 제공자 판별. 대소문자 구분 쉬우라고 소문자처리
+        iss = payload.get("iss", "")
+        if "kakao" in iss.lower():
+            current_provider = ProviderChoice.KAKAO
+        elif "google" in iss.lower():
+            current_provider = ProviderChoice.GOOGLE
+        else:
+            current_provider = ProviderChoice.KAKAO
+
+        # Cognito 페이로드에서 정보 추출 (우리 DB 컬럼에 매핑)
+        # sub -> provider_id, picture -> profile_img_url
+        provider_id = str(payload.get("sub"))
+
+        # 유저 생성 또는 조회 (이미지 처리를 위해 먼저 생성/조회)
+        user, created = await User.get_or_create(
+            provider_id=provider_id,
+            defaults={
+                "provider": current_provider,
+                "email": payload.get("email"),
+                "nickname": payload.get("nickname")
+                or payload.get("name")
+                or f"user_{provider_id[:8]}",
+            },
+        )
+
+        # 신규 유저이거나 프로필 이미지가 없는 경우 카카오 이미지 S3 처리
+        if created or not user.profile_img_url:
+            kakao_img_url = payload.get("picture")  # Cognito 매핑된 프로필 이미지
+            if kakao_img_url:
+                s3_url = await self._process_and_upload_image(user, kakao_img_url)
+                user.profile_img_url = s3_url
+                await user.save()
+
+        if created:
+            await UserNoti.create(user=user)
+
+        return TokenResponse(
+            access_token=create_access_token(user.id),
+            refresh_token=create_refresh_token(user.id),
+            token_type="bearer",
+            is_new_user=created,
+        )
+
+    # 삭제 또는 네이버로 변경 예정
     async def process_kakao_login(self, code: str) -> TokenResponse:
         # 카카오 토큰 획득
         kakao_access_token = await kakao_client.get_access_token(code)

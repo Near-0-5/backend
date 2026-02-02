@@ -14,7 +14,7 @@ COGNITO_ALGORITHM = "RS256"  # AWS Cognito용
 _jwks_cache = None
 
 
-async def verify_cognito_token(token: str):
+async def verify_cognito_token(token: str) -> dict[str, Any]:
     """
     AWS Cognito ID Token을 검증하고 페이로드를 반환합니다.
     """
@@ -30,16 +30,16 @@ async def verify_cognito_token(token: str):
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get("kid")
 
-        # 3. JWKS에서 kid와 일치하는 공개키 찾기
+        # JWKS에서 kid와 일치하는 공개키 찾기
         key_data = next((k for k in _jwks_cache["keys"] if k["kid"] == kid), None)
         if not key_data:
             raise HTTPException(status_code=401, detail="Invalid token: kid not found")
 
-        # 4. PyJWT는 JWK 객체를 직접 처리하므로 RS256 공개키로 변환 (RSA 공개키 객체 생성)
-        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+        # PyJWT는 JWK 객체를 직접 처리하므로 RS256 공개키로 변환 (RSA 공개키 객체 생성)
+        public_key: Any = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
 
-        # 5. 토큰 검증 및 디코딩
-        payload = jwt.decode(
+        # 토큰 검증 및 디코딩
+        payload: dict[str, Any] = jwt.decode(
             token,
             public_key,
             algorithms=[COGNITO_ALGORITHM],
@@ -48,10 +48,10 @@ async def verify_cognito_token(token: str):
         )
         return payload
 
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.ExpiredSignatureError as e:
+        raise HTTPException(status_code=401, detail="Token has expired") from e
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Token validation failed: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Token validation failed: {str(e)}") from e
 
 
 def create_access_token(subject: str | Any, expires_delta: timedelta | None = None) -> str:

@@ -11,9 +11,8 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
 
 from app.core.config import settings
-from app.core.security import ALGORITHM
-from app.core.utils.permissions import AdminPermission
 from app.core.security import ALGORITHM, verify_cognito_token
+from app.core.utils.permissions import AdminPermission
 from app.domains.users.models import User
 
 security = HTTPBearer()
@@ -41,7 +40,7 @@ async def get_current_user_by_cognito(
 
     except Exception as e:
         # 검증 실패 시 401 에러 반환
-        raise HTTPException(status_code=401, detail=f"Invalid Cognito token: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Invalid Cognito token: {str(e)}") from e
 
         # DB에서 해당 provider_id(sub)를 가진 유저 조회
     user = await User.get_or_none(provider_id=cognito_sub)

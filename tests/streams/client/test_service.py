@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from app.core.config import settings
 from app.domains.streams.client.service import StreamUserService
 from app.domains.streams.models import (
     CategoryType,
@@ -93,7 +94,7 @@ class TestStreamService:
             mock_pb.sign_playback_token.assert_called_with(
                 channel_arn="arn:ivs:test2",  # DB에 저장한 값
                 viewer_id="1",
-                duration_sec=600,
+                duration_sec=settings.ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC,
             )
 
     @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException, UploadFile
 from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
 
-from app.core.config import now_kst
+from app.core.config import now_kst, settings
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist
@@ -602,7 +602,7 @@ class StreamAdminService:
             playback_token = self.playback_provider.sign_playback_token(
                 channel_arn=channel.channel_arn,
                 viewer_id=f"admin-{user.id}",
-                duration_sec=3600,  # 1시간
+                duration_sec=settings.ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC,  # 10분
             )
 
         # AWS IVS 헬스체크(방송 중 아니면 None)

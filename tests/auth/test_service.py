@@ -196,43 +196,29 @@ async def test_process_and_upload_image_exception_coverage(mocker):
 
 @pytest.mark.asyncio
 async def test_process_cognito_login_success(mocker, initialize_tests):
-    """service.py: Cognito 로그인 처리 로직 검증 (AttributeError 및 Protocol 에러 수정)"""
-    from app.core.config import settings
+    """service.py: Cognito 로그인 처리 및 유저 생성/업데이트 로직 검증"""
     from app.domains.auth.service import auth_service
+    from app.domains.users.models import User
 
-    # 1. service.py에서 실제로 사용하는 COGNITO_DOMAIN 속성을 패치
-    # 존재하지 않는 COGNITO_TOKEN_URL 대신 아래와 같이 설정해야 함
-    mocker.patch.object(
-        settings, "COGNITO_DOMAIN", "https://fake-cognito-domain.auth.region.amazoncognito.com"
-    )
-
-    # 2. 내부 httpx.AsyncClient.post 호출 모킹
-    # res.json()이 호출될 때 필요한 토큰 데이터를 반환하도록 설정
-    mock_res = mocker.Mock()
-    mock_res.status_code = 200
-    mock_res.json.return_value = {
-        "access_token": "fake_access",
-        "id_token": "fake_id_token",
-        "refresh_token": "fake_refresh",
-    }
-    mocker.patch("httpx.AsyncClient.post", return_value=mock_res)
-
-    # 3. 외부 연동 모킹 (토큰 검증)
+    # 1. 외부 연동 모킹 (verify_cognito_token)
     mocker.patch(
         "app.domains.auth.service.verify_cognito_token",
         new_callable=AsyncMock,
         return_value={
             "sub": "cognito_sub_123",
             "email": "cognito@test.com",
-            "nickname": "코그니토유저",
-            "iss": "https://cognito-idp.region.amazonaws.com/test",
+            "custom:nickname": "코그니토유저",
         },
     )
 
-    # 4. 서비스 실행
-    result = await auth_service.process_cognito_login("fake_code")
+    # 2. 서비스 실행
+    result = await auth_service.process_cognito_login("fake_id_token")
 
-    # 5. 검증
+    # 3. 검증
     assert result.access_token is not None
     assert result.refresh_token is not None
-    assert result.token_type == "bearer"
+
+    # DB에 유저가 생성되었는지 확인
+    user = await User.get_or_none(provider_id="cognito_sub_123")
+    assert user is not None
+    assert user.email == "cognito@test.com"

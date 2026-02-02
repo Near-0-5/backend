@@ -70,13 +70,7 @@ async def test_verify_cognito_token_errors(mocker):
 @pytest.mark.asyncio
 async def test_verify_cognito_token_invalid_kid(mocker):
     # JWKS에 존재하지 않는 kid 시나리오
-    mocker.patch("app.core.security._jwks_cache", None)
-
     mock_jwks = {"keys": [{"kid": "existing_kid"}]}
-    mock_res = mocker.Mock()
-    mock_res.status_code = 200
-    mock_res.json.return_value = mock_jwks
-
     mocker.patch(
         "httpx.AsyncClient.get", return_value=mocker.Mock(status_code=200, json=lambda: mock_jwks)
     )

@@ -7,8 +7,8 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from app.domains.artists.models import Artist
+from app.domains.concerts.models import CategoryType
 from app.domains.notifications.models import UserNoti
-from app.domains.streams.models import CategoryType
 from app.domains.users.models import GenderChoices, ProviderChoice, User, UserCatFav, UserDeleteLog
 from app.domains.users.schemas import NotiSettings, UserMeUpdate
 from app.domains.users.service import user_service

@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.domains.artists.models import Artist
-from app.domains.streams.models import CategoryType
+from app.domains.concerts.models import CategoryType
 
 
 @pytest.mark.asyncio

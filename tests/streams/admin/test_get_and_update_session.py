@@ -3,13 +3,12 @@ from datetime import datetime, timedelta
 import pytest
 from fastapi import HTTPException
 
+from app.domains.concerts.models import CategoryType, Concert
 from app.domains.streams.admin.schemas import SessionUpdateRequest
 from app.domains.streams.admin.service import StreamAdminService
 from app.domains.streams.models import (
     AccessLevel,
-    CategoryType,
     ChannelType,
-    Concert,
     ConcertSession,
     LatencyMode,
     StreamChannel,

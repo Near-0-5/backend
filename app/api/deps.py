@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.security import ALGORITHM
+from app.core.utils.permissions import AdminPermission
 from app.domains.users.models import User
 
 security = HTTPBearer()
@@ -48,6 +49,15 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    현재 로그인 어드민 유저를 반환합니다.
+    """
+    # 관리자 권한 체크
+    AdminPermission.must_be_admin(current_user)
+    return current_user
 
 
 async def get_user_from_refresh_token(refresh_token: str) -> User:

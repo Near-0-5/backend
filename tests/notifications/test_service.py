@@ -7,6 +7,7 @@ from tortoise.exceptions import IntegrityError
 
 from app.core.config import KST, now_kst
 from app.domains.artists.models import Artist
+from app.domains.concerts.models import CategoryType, Concert
 from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
 from app.domains.notifications.service import (
     NotificationService,
@@ -14,7 +15,7 @@ from app.domains.notifications.service import (
     _build_schedule,
     _normalize_start_at,
 )
-from app.domains.streams.models import CategoryType, Concert, ConcertSession, StreamStatus
+from app.domains.streams.models import ConcertSession, StreamStatus
 from app.domains.users.models import ProviderChoice, User, UserCatFav
 
 

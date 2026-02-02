@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.domains.streams.deps import get_admin_user
+from app.api.deps import get_admin_user
 from app.domains.streams.models import AccessLevel, StreamStatus
 from app.main import app
 
@@ -90,7 +90,7 @@ class TestStreamAdminCoverage:
 
         with (
             patch(
-                "app.domains.streams.models.Concert.get_or_none",
+                "app.domains.concerts.models.Concert.get_or_none",
                 new_callable=AsyncMock,
                 return_value=mock_concert,
             ),

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from tortoise import fields, models
 
-from app.domains.streams.models import CategoryType
+from app.domains.concerts.models import CategoryType
 
 if TYPE_CHECKING:
     from tortoise.fields import ForeignKeyRelation, ManyToManyRelation

@@ -2,7 +2,7 @@ import pytest
 
 from app.domains.artists.models import Artist, Follow
 from app.domains.artists.service import artist_service
-from app.domains.streams.models import CategoryType
+from app.domains.concerts.models import CategoryType
 from app.domains.users.models import ProviderChoice, User
 
 

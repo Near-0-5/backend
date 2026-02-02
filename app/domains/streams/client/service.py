@@ -7,11 +7,12 @@ from tortoise.expressions import Q
 
 from app.core.config import settings
 from app.core.pagination import paginate_cursor
+from app.domains.concerts.models import CategoryType
 from app.domains.streams.client.schemas import (
     ArtistItem,
     SessionDetailResponse,
 )
-from app.domains.streams.models import CategoryType, ConcertSession, StreamChannel, StreamStatus
+from app.domains.streams.models import ConcertSession, StreamChannel, StreamStatus
 from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
 from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider

@@ -11,6 +11,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.api.deps import get_admin_user
 from app.domains.streams import deps as streams_deps
 from app.domains.streams.admin.schemas import (
     SessionCreateRequest,
@@ -19,7 +20,6 @@ from app.domains.streams.admin.schemas import (
     StreamIngestResponse,
 )
 from app.domains.streams.admin.service import StreamAdminService
-from app.domains.streams.deps import get_admin_user
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/streams", tags=["스트리밍 관리"])

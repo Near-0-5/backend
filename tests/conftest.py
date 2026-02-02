@@ -14,6 +14,7 @@ _CONFIG = {
                 "app.domains.notifications.models",
                 "app.domains.artists.models",
                 "app.domains.streams.models",
+                "app.domains.concerts.models",
                 "aerich.models",
             ],
             "default_connection": "default",

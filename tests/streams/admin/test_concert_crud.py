@@ -3,17 +3,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
-from app.domains.streams.admin.schemas import ConcertCreateRequest
-from app.domains.streams.admin.service import StreamAdminService
-from app.domains.streams.deps import get_admin_user
-from app.domains.streams.models import CategoryType
+from app.api.deps import get_admin_user
+from app.domains.concerts.models import CategoryType
+from app.domains.concerts.schemas import ConcertCreateRequest
+from app.domains.concerts.service import ConcertAdminService
 from app.main import app
 
 
 @pytest.fixture
-def stream_admin_service():
+def concert_admin_service():
     # IVS 클라이언트와 플레이백 프로바이더는 모킹 처리
-    service = StreamAdminService(MagicMock(), MagicMock())
+    service = ConcertAdminService(MagicMock())
     service.image_resizer = AsyncMock()
     return service
 
@@ -29,8 +29,8 @@ def mock_user_admin():
 @pytest.mark.asyncio
 class TestConcertBasicCRUD:
     @pytest.fixture(autouse=True)
-    def setup(self, stream_admin_service, mock_user_admin):
-        self.service = stream_admin_service
+    def setup(self, concert_admin_service, mock_user_admin):
+        self.service = concert_admin_service
         self.admin = mock_user_admin
 
     # 콘서트 생성 테스트
@@ -38,7 +38,7 @@ class TestConcertBasicCRUD:
         data = ConcertCreateRequest(title="테스트 콘서트", category=CategoryType.KPOP)
 
         with patch(
-            "app.domains.streams.models.Concert.create", new_callable=AsyncMock
+            "app.domains.concerts.models.Concert.create", new_callable=AsyncMock
         ) as mock_create:
             mock_create.return_value = MagicMock(id=1, title="테스트 콘서트")
 
@@ -51,7 +51,7 @@ class TestConcertBasicCRUD:
     async def test_list_concerts(self):
         mock_concerts = [MagicMock(id=1), MagicMock(id=2)]
         with patch(
-            "app.domains.streams.admin.service.paginate_cursor", new_callable=AsyncMock
+            "app.domains.concerts.service.paginate_cursor", new_callable=AsyncMock
         ) as mock_paginate:
             mock_paginate.return_value = (mock_concerts, 1)
 
@@ -68,10 +68,10 @@ class TestConcertBasicCRUD:
         mock_query = MagicMock()
         mock_query.prefetch_related.return_value = AsyncMock(return_value=mock_concert)()
 
-        with patch("app.domains.streams.models.Concert.get_or_none") as mock_get:
+        with patch("app.domains.concerts.models.Concert.get_or_none") as mock_get:
             mock_get.return_value = mock_query
 
-            with patch("app.domains.streams.admin.schemas.ConcertDetailResponse.model_validate"):
+            with patch("app.domains.concerts.schemas.ConcertDetailResponse.model_validate"):
                 await self.service.get_concert_detail(concert_id, self.admin)
 
                 mock_get.assert_called_with(id=concert_id)
@@ -85,7 +85,7 @@ class TestConcertBasicCRUD:
         mock_concert.save = AsyncMock()
 
         with patch(
-            "app.domains.streams.models.Concert.get_or_none", new_callable=AsyncMock
+            "app.domains.concerts.models.Concert.get_or_none", new_callable=AsyncMock
         ) as mock_get:
             mock_get.return_value = mock_concert
 
@@ -104,7 +104,7 @@ class TestConcertBasicCRUD:
         mock_query = MagicMock()
         mock_query.prefetch_related.return_value = AsyncMock(return_value=mock_concert)()
 
-        with patch("app.domains.streams.models.Concert.get_or_none") as mock_get:
+        with patch("app.domains.concerts.models.Concert.get_or_none") as mock_get:
             mock_get.return_value = mock_query
 
             await self.service.delete_concert_with_infrastructure(concert_id, self.admin)
@@ -139,7 +139,7 @@ class TestConcertBasicCRUD:
             mock_concerts = [mock_concert]  # 내부 속성 접근을 위해 MagicMock 사용
 
             with patch(
-                "app.domains.streams.admin.service.StreamAdminService.list_concerts",
+                "app.domains.concerts.service.ConcertAdminService.list_concerts",
                 new_callable=AsyncMock,
             ) as mock_list:
                 mock_list.return_value = (mock_concerts, "2")
@@ -165,7 +165,7 @@ class TestConcertBasicCRUD:
             )
 
             with patch(
-                "app.domains.streams.admin.service.StreamAdminService.update_concert_thumbnail",
+                "app.domains.concerts.service.ConcertAdminService.update_concert_thumbnail",
                 new_callable=AsyncMock,
             ) as mock_thumb:
                 mock_thumb.return_value = returned_concert

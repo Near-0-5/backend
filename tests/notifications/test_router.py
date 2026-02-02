@@ -4,8 +4,9 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.deps import get_current_user
 from app.core.config import now_kst
+from app.domains.concerts.models import CategoryType, Concert
 from app.domains.notifications.models import ConcertNoti, NotiKind, NotiStatus, UserNoti
-from app.domains.streams.models import CategoryType, Concert, ConcertSession
+from app.domains.streams.models import ConcertSession
 from app.domains.users.models import ProviderChoice, User
 from app.main import app
 

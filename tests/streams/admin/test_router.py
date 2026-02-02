@@ -4,8 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.domains.streams.deps import get_admin_user
-from app.domains.streams.models import AccessLevel, ChannelType, Concert, LatencyMode, StreamStatus
+from app.api.deps import get_admin_user
+from app.domains.concerts.models import Concert
+from app.domains.streams.models import AccessLevel, ChannelType, LatencyMode, StreamStatus
 from app.main import app
 
 
@@ -46,7 +47,7 @@ class TestStreamRouter:
         try:
             with (
                 patch(
-                    "app.domains.streams.admin.service.StreamAdminService.create_concert",
+                    "app.domains.concerts.service.ConcertAdminService.create_concert",
                     new_callable=AsyncMock,
                 ) as mock_create_concert,
                 patch(

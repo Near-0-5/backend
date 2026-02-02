@@ -61,7 +61,7 @@ class TestStreamService:
         )
 
         with (
-            patch("app.domains.streams.models.Concert.get", new_callable=AsyncMock),
+            patch("app.domains.concerts.models.Concert.get", new_callable=AsyncMock),
             patch(
                 "app.domains.streams.models.ConcertSession.create", new_callable=AsyncMock
             ) as mock_sess_create,
@@ -121,7 +121,7 @@ class TestStreamService:
         mock_user = MagicMock(is_admin=True)
 
         with (
-            patch("app.domains.streams.models.Concert.get", new_callable=AsyncMock),
+            patch("app.domains.concerts.models.Concert.get", new_callable=AsyncMock),
             patch("app.domains.streams.models.ConcertSession.create", new_callable=AsyncMock) as m,
         ):
             # session.id가 있어야 IVS 채널 명칭(session-{id}) 생성이 가능함
@@ -174,7 +174,7 @@ class TestStreamService:
         mock_session.save = AsyncMock()
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get") as mock_get,
         ):
             # get()은 즉시 mock_query를 반환 (비동기 아님)
@@ -209,7 +209,7 @@ class TestStreamService:
         mock_session.stream_channel = None
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get") as mock_get,
         ):
             mock_query = MagicMock()
@@ -232,7 +232,7 @@ class TestStreamService:
         mock_user = MagicMock(is_admin=False)  # 일반 유저
 
         with patch(
-            "app.domains.streams.admin.service.StreamPermission.must_be_admin",
+            "app.core.utils.permissions.AdminPermission.must_be_admin",
             side_effect=HTTPException(status_code=403, detail="권한 없음"),
         ):
             with pytest.raises(HTTPException) as exc:
@@ -261,7 +261,7 @@ class TestStreamService:
         mock_ivs_client.create_stream_key.return_value = {"streamKey": {"value": "new_secret_key"}}
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get") as mock_get,
         ):
             mock_query = MagicMock()
@@ -295,7 +295,7 @@ class TestStreamService:
         mock_session.delete = AsyncMock()
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get_or_none") as mock_get_none,
         ):
             mock_query = MagicMock()
@@ -325,7 +325,7 @@ class TestStreamService:
         mock_session.save = AsyncMock()
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get") as mock_get,
         ):
             mock_query = MagicMock()
@@ -357,7 +357,7 @@ class TestStreamService:
         )
 
         with (
-            patch("app.domains.streams.models.Concert.get", new_callable=AsyncMock),
+            patch("app.domains.concerts.models.Concert.get", new_callable=AsyncMock),
             patch("app.domains.streams.models.ConcertSession.create", new_callable=AsyncMock),
             patch(
                 "app.domains.streams.admin.service.Artist.filter", new_callable=AsyncMock
@@ -390,7 +390,7 @@ class TestStreamService:
         mock_session.delete = AsyncMock()
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get_or_none") as mock_get_none,
             patch("app.domains.streams.admin.service.logger") as mock_logger,
         ):
@@ -420,7 +420,7 @@ class TestStreamService:
         mock_session.save = AsyncMock()
 
         with (
-            patch("app.domains.streams.admin.service.StreamPermission.must_be_admin"),
+            patch("app.core.utils.permissions.AdminPermission.must_be_admin"),
             patch("app.domains.streams.models.ConcertSession.get") as mock_get,
             patch("app.domains.streams.admin.service.logger") as mock_logger,
         ):

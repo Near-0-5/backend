@@ -11,7 +11,7 @@ from tortoise import Tortoise, run_async
 from app.core.config import settings
 from app.core.tortoise_config import TORTOISE_ORM
 from app.domains.artists.models import Artist, GroupType
-from app.domains.streams.models import CategoryType
+from app.domains.concerts.models import CategoryType
 
 """
     ** 1700+ K-Pop Idols Dataset

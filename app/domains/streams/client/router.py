@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Path
 from fastapi.params import Query
 
 from app.api import deps
+from app.domains.concerts.models import CategoryType
 from app.domains.streams import deps as streams_deps
 from app.domains.streams.client.schemas import (
     SessionDetailResponse,
@@ -12,7 +13,7 @@ from app.domains.streams.client.schemas import (
     SessionListResponse,
 )
 from app.domains.streams.client.service import StreamUserService
-from app.domains.streams.models import CategoryType, StreamStatus
+from app.domains.streams.models import StreamStatus
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/streams", tags=["스트리밍"])

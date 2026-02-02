@@ -3,32 +3,33 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException, status
 
-from app.domains.streams import deps
+from app.api import deps
+from app.domains.streams import deps as streams_deps
 from app.domains.users.models import User
 
 # --- 기초 서비스 주입 테스트 ---
 
 
 def test_get_ivs_client():
-    client = deps.get_ivs_client()
+    client = streams_deps.get_ivs_client()
     assert client is not None
     assert hasattr(client, "create_channel")
 
 
 def test_get_playback_provider():
-    provider = deps.get_playback_provider()
+    provider = streams_deps.get_playback_provider()
     assert provider is not None
     assert hasattr(provider, "sign_playback_token")
 
 
 def test_get_stream_admin_service():
-    service = deps.get_stream_admin_service()
+    service = streams_deps.get_stream_admin_service()
     assert service is not None
     assert service.ivs_client is not None
 
 
 def test_get_stream_user_service():
-    service = deps.get_stream_user_service()
+    service = streams_deps.get_stream_user_service()
     assert service is not None
     assert service.ivs_client is not None
     assert service.playback_provider is not None
@@ -44,7 +45,7 @@ async def test_get_admin_user_success():
     mock_user.is_superuser = True
 
     with patch(
-        "app.domains.streams.deps.get_current_user",
+        "app.api.deps.get_current_user",
         new_callable=AsyncMock,
     ) as mock_get_current:
         mock_get_current.return_value = mock_user

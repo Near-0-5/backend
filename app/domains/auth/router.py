@@ -103,11 +103,10 @@ async def social_callback(response: Response, code: str = Query(...)) -> Redirec
     token_data = await auth_service.process_cognito_login(code)
 
     # 화면으로 보낼 redirect url 구성 및 응답할 RedirectResponse 설정
-    redirect_url = (
-        f"{settings.CALLBACK_REDIRECT_URL}"
-        f"?access_token={token_data.access_token}"
-        f"&is_new_user={str(token_data.is_new_user).lower()}"
-    )
+    redirect_url = (f"{settings.CALLBACK_REDIRECT_URL}"
+                    f"?access_token={token_data.access_token}"
+                    f"&is_new_user={str(token_data.is_new_user).lower()}"
+                    )
     redirect_response = RedirectResponse(url=redirect_url)
 
     # Refresh Token을 HttpOnly 쿠키에 설정

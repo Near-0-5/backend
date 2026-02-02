@@ -16,6 +16,7 @@ from app.domains.notifications.tasks import (
 )
 from app.domains.streams.admin.schemas import (
     ChannelConfig,
+    IVSChannelSummary,
     IVSUpdateConfig,
     SessionCreateRequest,
     SessionListItem,
@@ -23,6 +24,7 @@ from app.domains.streams.admin.schemas import (
     SessionResponse,
     SessionUpdateRequest,
     StreamIngestResponse,
+    StreamLiveMetrics,
     StreamWebhookPayload,
 )
 from app.domains.streams.models import (
@@ -54,7 +56,9 @@ class StreamAdminService:
 
     async def _get_session_with_channel_or_raise(self, session_id: int) -> ConcertSession:
         """콘서트 세션 + 연결된 IVS Channel 조회"""
-        session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
+        session = await ConcertSession.get_or_none(id=session_id).prefetch_related(
+            "stream_channel", "concert"
+        )
         if not session:
             raise HTTPException(404, f"Concert Session {session_id} not found")
         return session
@@ -129,17 +133,31 @@ class StreamAdminService:
         if session_id:
             await ConcertSession.filter(id=session_id).delete()
 
+    def _map_channel_summary(self, channel: StreamChannel | None) -> IVSChannelSummary | None:
+        if not channel:
+            return None
+
+        return IVSChannelSummary(
+            arn=channel.channel_arn,
+            ingest_endpoint=channel.ingest_endpoint,
+            playback_url=channel.playback_url,
+            latency_mode=channel.latency_mode,
+            type=channel.type,
+        )
+
     def _map_to_session_response(
         self, session: ConcertSession, channel: StreamChannel | None, raw_key: str | None = None
     ) -> SessionResponse:
         """SessionResponse 스키마로 변환"""
 
-        return SessionResponse.model_validate(
-            {
-                **session.__dict__,
-                "channel": channel,
-                "value": raw_key or (channel.get_stream_key() if channel else None),
-            }
+        return SessionResponse(
+            id=session.id,
+            session_name=session.session_name,
+            access_level=session.access_level,
+            start_at=session.start_at,
+            status=session.status,
+            channel=self._map_channel_summary(channel),
+            value=raw_key or (channel.get_stream_key() if channel else None),
         )
 
     def _map_to_session_list_item(
@@ -171,9 +189,21 @@ class StreamAdminService:
 
         stream = stream_res.get("stream") if stream_res else None
 
+        live_metrics = None
+        if stream:
+            from datetime import datetime
+
+            live_metrics = StreamLiveMetrics(
+                health=stream.get("health"),
+                viewer_count=stream.get("viewerCount"),
+                start_time=stream.get("startTime", datetime.now()),  # 기본값 처리
+                state=stream.get("state", "LIVE"),  # 기본 LIVE
+            )
+
         return StreamIngestResponse.model_validate(
             {
                 "session_id": session.id,
+                "session_name": session.session_name,
                 "is_live": stream is not None,
                 "concert_title": session.concert.title,
                 "playback_url": channel.playback_url,
@@ -182,7 +212,7 @@ class StreamAdminService:
                     "ingest_endpoint": channel.ingest_endpoint,
                     "value": channel.get_stream_key(),
                 },
-                "live_metrics": stream if stream else None,
+                "live_metrics": live_metrics,
             }
         )
 
@@ -293,7 +323,7 @@ class StreamAdminService:
         sessions, next_cursor = await paginate_cursor(
             queryset=queryset, cursor=cursor, limit=limit, order_by="-id"
         )
-        items = [self._map_to_session_list_item(s, display_status=s.status) for s in sessions]
+        items = [self._map_to_session_list_item(s, display_status=s.status) for s in sessions] or []
         return SessionListResponse(items=items, next_cursor=next_cursor)
 
     async def get_session_admin_detail(self, session_id: int, user: User) -> SessionResponse:

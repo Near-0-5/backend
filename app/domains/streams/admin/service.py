@@ -1,21 +1,21 @@
-from typing import Any, Literal, cast
+from typing import Literal, cast
 
 from botocore.exceptions import ClientError
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
 from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
 
 from app.core.config import now_kst, settings
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
+from app.core.utils.permissions import AdminPermission
 from app.domains.artists.models import Artist
+from app.domains.concerts.models import Concert
 from app.domains.notifications.tasks import (
     dispatch_due_notifications,
     reschedule_session_notifications,
     schedule_session_notifications,
 )
 from app.domains.streams.admin.schemas import (
-    ConcertCreateRequest,
-    ConcertDetailResponse,
     IVSChannelSummary,
     SessionCreateRequest,
     SessionResponse,
@@ -27,14 +27,12 @@ from app.domains.streams.admin.schemas import (
 )
 from app.domains.streams.models import (
     AccessLevel,
-    Concert,
     ConcertArtist,
     ConcertSession,
     StreamChannel,
     StreamSession,
     StreamStatus,
 )
-from app.domains.streams.permissions import StreamPermission
 from app.domains.users.models import User
 from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider
 from app.integrations.aws_ivs.client import logger
@@ -45,126 +43,6 @@ class StreamAdminService:
         self.ivs_client = ivs_client
         self.playback_provider = playback_provider
         self.image_resizer = ImageResizer()
-
-    # ================================ 콘서트 관리 ====================================
-    async def create_concert(self, data: ConcertCreateRequest, user: User) -> Concert:
-        """
-        [Admin] 콘서트 생성
-        """
-        StreamPermission.must_be_admin(user)
-        return await Concert.create(**data.model_dump())
-
-    async def update_concert_thumbnail(
-        self, concert_id: int, file: UploadFile, user: User
-    ) -> Concert:
-        """
-        [Admin] 콘서트 썸네일 생성 및 수정
-        """
-        StreamPermission.must_be_admin(user)
-
-        # 콘서트 있는지 확인
-        concert = await Concert.get_or_none(id=concert_id)
-        if not concert:
-            raise HTTPException(status_code=404, detail="콘서트를 찾을 수 없습니다.")
-
-        # 기존 이미지가 있다면 S3 폴더 삭제
-        if concert.thumbnail_url:
-            await self.image_resizer.delete_all_by_id_path(concert.thumbnail_url)
-
-        # 새로운 이미지 리사이징 업로드
-        path_prefix = f"concerts/{concert.id}/thumbnail"
-        sizes = (300, 640, 1280)
-
-        urls = await self.image_resizer.upload_square_resizes(
-            image_file=file.file, sizes=sizes, path_prefix=path_prefix
-        )
-
-        # DB 업데이트
-        img_url = urls.get("640")
-        concert.thumbnail_url = img_url if img_url else ""
-        await concert.save()
-
-        return concert
-
-    async def list_concerts(
-        self, user: User, limit: int = 20, cursor: int | None = None
-    ) -> tuple[list[Concert], int | None]:
-        """
-        [Admin] 콘서트 목록 조회
-        """
-        StreamPermission.must_be_admin(user)
-
-        queryset = Concert.all()
-        result: Any = await paginate_cursor(queryset, limit=limit, cursor=cursor, order_by="-id")
-
-        concerts: list[Concert] = result[0]
-        next_cursor: int | None = result[1]
-
-        return concerts, next_cursor
-
-    async def get_concert_detail(self, concert_id: int, user: User) -> ConcertDetailResponse:
-        """
-        [Admin] 콘서트 상세 조회(하위 세션 목록 포함)
-        """
-        StreamPermission.must_be_admin(user)
-
-        concert = await Concert.get_or_none(id=concert_id).prefetch_related(
-            "sessions__stream_channel"
-        )
-
-        if not concert:
-            raise HTTPException(404, "존재하지 않는 콘서트입니다.")
-
-        return ConcertDetailResponse.model_validate(concert)
-
-    async def update_concert(
-        self, concert_id: int, data: ConcertCreateRequest, user: User
-    ) -> Concert:
-        """
-        [Admin] 콘서트 수정
-        """
-        StreamPermission.must_be_admin(user)
-
-        concert = await Concert.get_or_none(id=concert_id)
-        if not concert:
-            raise HTTPException(404, "수정할 콘서트를 찾을 수 없습니다.")
-
-        # 요청 데이터 반영 (exclude_unset=True로 보낸 값만 수정)
-        update_data = data.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(concert, key, value)
-
-        await concert.save()
-        return concert
-
-    async def delete_concert_with_infrastructure(self, concert_id: int, user: User) -> None:
-        """
-        [Admin] 콘서트 삭제 및 AWS IVS 채널 삭제
-        """
-        StreamPermission.must_be_admin(user)
-
-        # 세션, 채널 정보 모두 가져옴
-        concert = await Concert.get_or_none(id=concert_id).prefetch_related(
-            "sessions__stream_channel"
-        )
-
-        if not concert:
-            raise HTTPException(404, "삭제할 콘서트를 찾을 수 없습니다.")
-
-        # 연결된 모든 세션의 AWS IVS 채널 먼저 삭제
-        for session in list(concert.sessions):  # type: ignore[call-overload]
-            if hasattr(session, "stream_channel") and session.stream_channel:
-                try:
-                    self.ivs_client.delete_channel(session.stream_channel.channel_arn)
-                except Exception as e:
-                    logger.warning(f"콘서트 삭제 중 세션({session.id})의 IVS 채널 삭제 실패: {e}")
-
-        # 썸네일 삭제 (S3)
-        if concert.thumbnail_url:
-            await self.image_resizer.delete_all_by_id_path(concert.thumbnail_url)
-
-        # DB 삭제(cascade)
-        await concert.delete()
 
     # ================================ IVS 상태 웹훅 ===================================
     async def handle_ivs_webhook(self, payload: StreamWebhookPayload) -> None:
@@ -221,7 +99,7 @@ class StreamAdminService:
         [Admin] 콘서트 세션 생성 및 AWS IVS 채널 자동 발급
         """
         # 권한 체크
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         # Concert 있나 확인
         concert = await Concert.get(id=concert_id)
@@ -324,7 +202,7 @@ class StreamAdminService:
         """
         [Admin] 스트림 키 유출 시 재발급
         """
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
         channel = session.stream_channel
@@ -348,7 +226,7 @@ class StreamAdminService:
         """
         [Admin] 세션 삭제 및 연결된 IVS 채널 영구 제거
         """
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         # 채널 정보 조회를 위해 관계 로드
         session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
@@ -370,7 +248,7 @@ class StreamAdminService:
         """
         [Admin] 라이브 방송 강제 중단 및 상태 종료 처리
         """
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
         channel = session.stream_channel
@@ -395,7 +273,7 @@ class StreamAdminService:
         """
         [Admin] 라이브 방송 목록 조회
         """
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         # DB 조회
         queryset = ConcertSession.all().prefetch_related("stream_channel", "concert")
@@ -459,7 +337,7 @@ class StreamAdminService:
         """
         [Admin] 콘서트 세션 상세 조회
         """
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
         session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
         if not session:
             raise HTTPException(404, "해당 콘서트 세션을 찾을 수 없습니다.")
@@ -489,7 +367,7 @@ class StreamAdminService:
         """
         [Admin] 콘서트 세션 수정
         """
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         # 동시 수정 방지 Lock
         session = (
@@ -584,7 +462,7 @@ class StreamAdminService:
         [Admin] 송출 상세 정보 조회, 실시간 상태 확인
         """
         # 관리자 권한 체크
-        StreamPermission.must_be_admin(user)
+        AdminPermission.must_be_admin(user)
 
         # DB 조회
         session = await ConcertSession.get(id=session_id).prefetch_related(

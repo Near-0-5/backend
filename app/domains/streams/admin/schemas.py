@@ -111,6 +111,29 @@ class SessionResponse(BaseModel):
     )
 
 
+class SessionListItem(BaseModel):
+    """세션 목록"""
+
+    model_config = COMMON_CONFIG
+
+    id: int
+    concert_title: str
+    session_name: str
+    thumbnail_url: str | None
+    category: str
+    status: StreamStatus
+    start_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    """세션 목록 응답"""
+
+    model_config = COMMON_CONFIG
+
+    items: list[SessionListItem]
+    next_cursor: int | None
+
+
 class StreamIngestResponse(BaseModel):
     """송출 OBS 응답"""
 

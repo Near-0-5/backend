@@ -14,17 +14,8 @@ from app.core.config import settings
 
 if TYPE_CHECKING:
     from app.domains.artists.models import Artist
+    from app.domains.concerts.models import Concert
     from app.domains.notifications.models import ConcertNoti
-
-
-# 공연 장르 카테고리
-class CategoryType(str, Enum):
-    KPOP = "K-POP"
-    TROT = "TROT"
-    MUSICAL = "MUSICAL"
-    BAND = "BAND"
-    FAN_MEETING = "FAN_MEETING"
-    KOREA_TOUR = "KOREA_TOUR"
 
 
 # 방송 송출 상태
@@ -66,35 +57,6 @@ class AccessLevel(str, Enum):
     PUBLIC = "PUBLIC"  # 전체 공개
     ADMIN_ONLY = "ADMIN_ONLY"  # 관리자/테스트용
     SPECIFIC = "SPECIFIC"  # 특정 유저(결제 유저 등)
-
-
-class Concert(models.Model):
-    """
-    공연 메타 데이터
-    - 특정 Category에 속함
-    """
-
-    id = fields.BigIntField(primary_key=True)
-    category = fields.CharEnumField(
-        CategoryType, default=CategoryType.KPOP, db_index=True, description="장르(category)"
-    )
-    title = fields.CharField(max_length=100, description="공연 제목")
-    thumbnail_url = fields.CharField(
-        max_length=255, null=True, description="공연 썸네일 사진(포스터 등)"
-    )
-    description = fields.TextField(null=True, description="콘서트 소개 글")
-
-    created_at = fields.DatetimeField(auto_now_add=True, description="생성시각")
-    updated_at = fields.DatetimeField(auto_now=True, description="수정시각")
-
-    if TYPE_CHECKING:
-        sessions: ForeignKeyRelation["ConcertSession"]
-
-    class Meta:
-        table = "concerts"
-
-    def __str__(self) -> str:
-        return f"{self.title} (id={self.id})"
 
 
 class ConcertSession(models.Model):

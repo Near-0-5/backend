@@ -69,7 +69,7 @@ class StreamAdminService:
         if len(artists) != len(artist_ids):
             found_ids = {a.id for a in artists}
             missing = set(artist_ids) - found_ids
-            raise HTTPException(400, f"Artist(s) {missing} not found")
+            raise HTTPException(404, f"Artist(s) {missing} not found")
 
         return list(artists)
 

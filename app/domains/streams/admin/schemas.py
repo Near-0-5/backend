@@ -5,7 +5,6 @@ from pydantic.alias_generators import to_camel
 
 from app.domains.streams.models import (
     AccessLevel,
-    CategoryType,
     ChannelType,
     LatencyMode,
     StreamStatus,
@@ -59,16 +58,6 @@ class IVSChannelSummary(BaseModel):
 
 
 # ==================== 요청 스키마 ====================
-class ConcertCreateRequest(BaseModel):
-    """콘서트 생성 요청 스키마"""
-
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True, from_attributes=True, extra="forbid"
-    )  # 프론트에서 오는 camel -> snake
-    category: CategoryType
-    title: str = Field(..., min_length=1, max_length=100)
-    description: str | None = None
-    thumbnail_url: str | None = None
 
 
 class SessionCreateRequest(BaseModel):
@@ -102,18 +91,6 @@ class SessionUpdateRequest(BaseModel):
 
 
 # ==================== 응답 스키마 ====================
-class ConcertResponse(BaseModel):
-    """콘서트 생성 응답"""
-
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True, from_attributes=True, extra="forbid"
-    )
-    id: int
-    title: str
-    category: CategoryType
-    description: str | None = None
-    thumbnail_url: str | None = Field(None)
-    created_at: datetime
 
 
 class SessionResponse(BaseModel):
@@ -132,12 +109,6 @@ class SessionResponse(BaseModel):
     stream_key: str | None = Field(
         None, description="생성 시에만 일회성으로 노출되는 스트림 키", alias="value"
     )
-
-
-class ConcertDetailResponse(ConcertResponse):
-    """콘서트 상세 응답"""
-
-    sessions: list[SessionResponse] = Field(default_factory=list)
 
 
 class StreamIngestResponse(BaseModel):

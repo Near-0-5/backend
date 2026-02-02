@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domains.artists.models import GroupType
 from app.domains.artists.schemas import ArtistBase
+from app.domains.concerts.models import CategoryType
 from app.domains.notifications.models import UserNoti
-from app.domains.streams.models import CategoryType
 from app.domains.users.models import User, UserCatFav
 
 

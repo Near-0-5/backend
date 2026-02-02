@@ -10,15 +10,15 @@ from fastapi import (
     status,
 )
 
-from app.domains.streams import deps as streams_deps
-from app.domains.streams.admin.schemas import (
+from app.api.deps import get_admin_user
+from app.domains.concerts import deps as concerts_deps
+from app.domains.concerts.models import Concert
+from app.domains.concerts.schemas import (
     ConcertCreateRequest,
     ConcertDetailResponse,
     ConcertResponse,
 )
-from app.domains.streams.admin.service import StreamAdminService
-from app.domains.streams.deps import get_admin_user
-from app.domains.streams.models import Concert
+from app.domains.concerts.service import ConcertAdminService
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/concerts", tags=["콘서트 관리"])
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/admin/concerts", tags=["콘서트 관리"])
 async def create_concert(
     data: ConcertCreateRequest,
     current_admin: User = Depends(get_admin_user),
-    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+    service: ConcertAdminService = Depends(concerts_deps.get_concert_admin_service),
 ) -> Concert:
     return await service.create_concert(data, current_admin)
 
@@ -50,7 +50,7 @@ async def list_concerts(
     cursor: int | None = Query(None, description="마지막으로 조회된 콘서트 ID"),
     limit: int = Query(20, ge=1, le=100),
     current_admin: User = Depends(get_admin_user),
-    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+    service: ConcertAdminService = Depends(concerts_deps.get_concert_admin_service),
 ) -> list[Concert]:
     concerts, next_cursor = await service.list_concerts(current_admin, limit, cursor)
 
@@ -67,7 +67,7 @@ async def list_concerts(
 async def get_concert_detail(
     concert_id: int = Path(..., description="콘서트 ID"),
     current_admin: User = Depends(get_admin_user),
-    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+    service: ConcertAdminService = Depends(concerts_deps.get_concert_admin_service),
 ) -> ConcertDetailResponse:
     return await service.get_concert_detail(concert_id, current_admin)
 
@@ -81,7 +81,7 @@ async def update_concert(
     concert_id: int = Path(...),
     data: ConcertCreateRequest = Body(...),
     current_admin: User = Depends(get_admin_user),
-    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+    service: ConcertAdminService = Depends(concerts_deps.get_concert_admin_service),
 ) -> Concert:
     return await service.update_concert(concert_id, data, current_admin)
 
@@ -94,7 +94,7 @@ async def update_concert(
 async def delete_concert(
     concert_id: int = Path(...),
     current_admin: User = Depends(get_admin_user),
-    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+    service: ConcertAdminService = Depends(concerts_deps.get_concert_admin_service),
 ) -> None:
     return await service.delete_concert_with_infrastructure(concert_id, current_admin)
 
@@ -109,7 +109,7 @@ async def update_concert_thumbnail(
     current_admin: User = Depends(get_admin_user),
     concert_id: int = Path(..., description="콘서트 ID"),
     thumbnail_file: UploadFile = File(..., description="썸네일 이미지 파일"),
-    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+    service: ConcertAdminService = Depends(concerts_deps.get_concert_admin_service),
 ) -> Concert:
     # 인증된 current_admin 객체를 서비스로 직접 전달
     return await service.update_concert_thumbnail(

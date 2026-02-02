@@ -6,9 +6,9 @@ from fastadmin import register
 
 from app.admin.models import AdminUser
 from app.domains.artists.models import Artist, Follow
+from app.domains.concerts.models import Concert
 from app.domains.notifications.models import ConcertNoti
 from app.domains.streams.models import (
-    Concert,
     ConcertArtist,
     ConcertSession,
     StreamChannel,

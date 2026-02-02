@@ -3,7 +3,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.domains.artists.models import GroupType
-from app.domains.streams.models import CategoryType, StreamStatus
+from app.domains.concerts.models import CategoryType
+from app.domains.streams.models import StreamStatus
 
 
 class BaseSchema(BaseModel):

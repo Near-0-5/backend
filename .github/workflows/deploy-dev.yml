@@ -61,7 +61,7 @@ jobs:
             cd ~/app
             
             # 오래된 이미지 정리            
-            docker image prune -af --filter "until=72h" || true
+            docker image prune -af || true
             
             # IMAGE_TAG를 docker-compose에 전달
             IMAGE_TAG=$IMAGE_TAG docker compose -f docker-compose.prod.yml pull

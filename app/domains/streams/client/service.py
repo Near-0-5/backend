@@ -5,6 +5,7 @@ from typing import Any
 from fastapi.exceptions import HTTPException
 from tortoise.expressions import Q
 
+from app.core.config import settings
 from app.core.pagination import paginate_cursor
 from app.domains.streams.client.schemas import (
     ArtistItem,
@@ -38,7 +39,9 @@ class StreamUserService:
         # 비공개 채널이면 토큰 서명
         if channel.is_private:
             token = self.playback_provider.sign_playback_token(
-                channel_arn=channel.channel_arn, viewer_id=str(user.id)
+                channel_arn=channel.channel_arn,
+                viewer_id=str(user.id),
+                duration_sec=settings.ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC,
             )
             playback_url = f"{playback_url}?token={token}"
 
@@ -73,7 +76,7 @@ class StreamUserService:
         new_token = self.playback_provider.sign_playback_token(
             channel_arn=session.stream_channel.channel_arn,
             viewer_id=str(user.id),
-            duration_sec=600,  # 10분으로 바꿈
+            duration_sec=settings.ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC,
         )
         refreshed_playback_url = f"{channel.playback_url}?token={new_token}"
 

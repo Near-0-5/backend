@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     S3_RECORDING_BUCKET: str
     IMAGES_BUCKET: str
     IVS_WEBHOOK_SECRET: str
+    ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC: int = 600  # 10 min
+    IVS_PLAYBACK_TOKEN_EXPIRATION_SEC: int = 3600  # 60 min
 
     # social_login
     KAKAO_REST_API_KEY: str

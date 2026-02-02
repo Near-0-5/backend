@@ -28,9 +28,7 @@ class IVSPlaybackProvider:
 
     # ===================== playback_token 발급 =====================
 
-    def sign_playback_token(
-        self, channel_arn: str, viewer_id: str, duration_sec: int = 3600
-    ) -> str:
+    def sign_playback_token(self, channel_arn: str, viewer_id: str, duration_sec: int) -> str:
         """
         [IVS 전용] 비공개 채널 시청 토큰 발급 (ES384 서명)
         - Playback URL 뒤에 '?token=' 파라미터로 붙음

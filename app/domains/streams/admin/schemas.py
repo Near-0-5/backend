@@ -141,6 +141,7 @@ class StreamIngestResponse(BaseModel):
     session_id: int
     is_live: bool
     concert_title: str
+    session_name: str
     ingest_info: StreamIngestInfo
     playback_url: str
     playback_token: str | None = None

@@ -6,11 +6,6 @@ from app.domains.users.models import User
 
 class StreamPermission:
     @staticmethod
-    def must_be_admin(user: User) -> None:
-        if not user.is_superuser:
-            raise HTTPException(403, "관리자만 접근이 가능합니다.")
-
-    @staticmethod
     async def verify_playback_access(user: User, session: ConcertSession) -> None:
         """
         유저가 IVS 토큰을 발급받을 자격이 있는지 확인

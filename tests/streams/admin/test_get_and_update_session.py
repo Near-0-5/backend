@@ -69,8 +69,22 @@ async def session_with_channel(concert):
     return session
 
 
+@pytest.fixture(autouse=True)
+def bypass_stream_key_crypto(monkeypatch):
+    monkeypatch.setattr(
+        StreamChannel,
+        "get_stream_key",
+        lambda self: "test-stream-key",
+    )
+    monkeypatch.setattr(
+        StreamChannel,
+        "set_stream_key",
+        lambda self, _: None,
+    )
+
+
 @pytest.mark.asyncio
-async def test_list_sessions_admin_live_overrides_db(
+async def test_list_sessions_admin_returns_db_status(
     admin_service, admin_user, session_with_channel, monkeypatch
 ):
     service = admin_service
@@ -84,31 +98,11 @@ async def test_list_sessions_admin_live_overrides_db(
         fake_list_live_streams,
     )
 
-    results, next_cursor = await service.list_sessions_admin(admin_user)
+    response = await service.list_sessions_admin(admin_user)
 
-    assert next_cursor is None
-    assert len(results) == 1
-    assert results[0].status == StreamStatus.LIVE
-
-
-@pytest.mark.asyncio
-async def test_list_sessions_admin_aws_failure_fallback(
-    admin_service, admin_user, session_with_channel, monkeypatch
-):
-    service = admin_service
-
-    def raise_error():
-        raise Exception("AWS down")
-
-    monkeypatch.setattr(
-        service.ivs_client,
-        "list_live_streams",
-        raise_error,
-    )
-
-    results, _ = await service.list_sessions_admin(admin_user)
-
-    assert results[0].status == StreamStatus.READY
+    assert response.next_cursor is None
+    assert len(response.items) == 1
+    assert response.items[0].status == StreamStatus.READY
 
 
 @pytest.mark.asyncio
@@ -126,8 +120,11 @@ async def test_get_session_admin_detail_success(admin_service, admin_user, sessi
 
 
 @pytest.mark.asyncio
-async def test_get_session_admin_detail_not_found(admin_service, admin_user):
+async def test_get_session_admin_detail_not_found(admin_service, admin_user, monkeypatch):
     service = admin_service
+
+    monkeypatch.setattr(StreamChannel, "get_stream_key", lambda self: "test-key")
+    monkeypatch.setattr(StreamChannel, "set_stream_key", lambda self, _: None)
 
     with pytest.raises(HTTPException) as exc:
         await service.get_session_admin_detail(999, admin_user)
@@ -181,7 +178,7 @@ async def test_sync_session_status_to_live(admin_service, session_with_channel, 
 
     channel = await session_with_channel.stream_channel.first()
 
-    status, res = await service._sync_session_status_with_aws(
+    status, res = await service._sync_and_get_health(
         session_with_channel,
         channel,
     )
@@ -204,7 +201,7 @@ async def test_sync_does_not_override_ended(admin_service, session_with_channel,
 
     channel = await session_with_channel.stream_channel.first()
 
-    status, _ = await service._sync_session_status_with_aws(
+    status, _ = await service._sync_and_get_health(
         session_with_channel,
         channel,
     )

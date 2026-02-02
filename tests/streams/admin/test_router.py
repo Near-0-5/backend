@@ -212,6 +212,7 @@ class TestStreamRouter:
                     session_id=1,
                     is_live=True,
                     concert_title="Test Concert",
+                    session_name="Test Session",
                     ingest_info=StreamIngestInfo(
                         ingest_endpoint="rtmps://test.com",
                         value="sk_test",

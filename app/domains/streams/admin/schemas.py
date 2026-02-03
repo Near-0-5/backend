@@ -148,11 +148,10 @@ class StreamIngestResponse(BaseModel):
     live_metrics: StreamLiveMetrics | None = None
 
 
-# ========================= IVS 상태 동기회 웹훅 =========================
+# ========================= IVS 상태 동기화 웹훅 =========================
 class IVSDetail(BaseModel):
     channel_name: str | None = Field(None, alias="channel_name")
     stream_id: str | None = Field(None, alias="stream_id")
-    channel_arn: str | None = Field(..., alias="channel_arn")
     event_name: str | None = Field(..., alias="event_name")  # Stream Start | Stream End
 
 
@@ -161,9 +160,10 @@ class IVSEvent(BaseModel):
     version: str
     id: str
     detail_type: str = Field(..., alias="detail-type")  # IVS Stream State Change
-    source: str
-    time: str
-    region: str
+    source: str = "aws.ivs"
+    account: str
+    time: datetime
+    region: str  # enum으로 바꿔놓기
     resources: list[str]
     detail: IVSDetail
 

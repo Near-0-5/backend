@@ -185,6 +185,7 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         "concert",
         "session_name",
         "status",
+        "monitor_link",
         "access_level",
         "start_at",
         "end_at",
@@ -240,6 +241,15 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         if not obj:
             return None
         return await self.serialize_obj(obj)
+
+    def monitor_link(self, obj: ConcertSession) -> str:
+        from fastadmin.settings import settings as admin_settings
+
+        url = f"/{admin_settings.ADMIN_PREFIX}/sessions/{obj.id}/monitor"
+        return f'<a href="{url}" target="_blank" style="color: #007bff; font-weight: bold;">모니터링</a>'
+
+    monitor_link.short_description = "모니터링"
+    monitor_link.allow_tags = True  # HTML 렌더링 허용
 
 
 @register(ConcertArtist)

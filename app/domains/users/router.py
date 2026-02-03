@@ -62,7 +62,7 @@ async def withdraw(
 ) -> Response:
     """회원 데이터 삭제 및 쿠키 제거"""
     # DB 삭제
-    await user_service.withdraw_kakao_user(current_user, reason)
+    await user_service.withdraw_user(current_user, reason)
     # 쿠키제거
     response.delete_cookie(key="refresh_token", path="/")
 

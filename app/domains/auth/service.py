@@ -1,5 +1,3 @@
-import uuid
-from datetime import datetime
 from io import BytesIO
 
 import httpx
@@ -11,7 +9,7 @@ from app.core.utils.image_resizer import ImageResizer
 from app.domains.auth.schemas import TokenResponse
 from app.domains.notifications.models import UserNoti
 from app.domains.users.models import ProviderChoice, User
-from app.integrations.kakao import kakao_client
+from app.integrations.naver import naver_client
 
 
 class AuthService:
@@ -57,7 +55,7 @@ class AuthService:
                 "client_id": settings.COGNITO_CLIENT_ID,
                 "client_secret": settings.COGNITO_CLIENT_SECRET,
                 "code": code,
-                "redirect_uri": settings.KAKAO_REDIRECT_URI,
+                "redirect_uri": settings.COGNITO_REDIRECT_URI,
             }
             res = await client.post(token_url, data=data)
             tokens = res.json()
@@ -110,7 +108,62 @@ class AuthService:
             is_new_user=created,
         )
 
-    # 삭제 또는 네이버로 변경 예정
+    async def process_naver_login(self, code: str, state: str = "naver_login") -> TokenResponse:
+        """
+        네이버 로그인 프로세스: 토큰 획득 -> 프로필 조회 -> DB 저장/업데이트 -> JWT 발급
+        state = 네이버 로그인값 필수...
+        """
+        # 네이버로부터 액세스 토큰 획득
+        access_token = await naver_client.get_access_token(code, state)
+
+        # 네이버 유저 정보 획득
+        naver_user_info = await naver_client.get_user_info(access_token)
+
+        provider_id = str(naver_user_info.get("id"))  # 네이버의 유니크 ID
+        email = naver_user_info.get("email")
+        nickname = naver_user_info.get("nickname") or f"naver_{provider_id[:5]}"
+        real_name = naver_user_info.get("name")
+        profile_image = naver_user_info.get("profile_image")
+        phone_number = naver_user_info.get("mobile")
+        formatted_gender = str(naver_user_info.get("gender") or "U")
+
+        # 생일 포맷팅 (네이버: birthday="MM-DD", birthyear="YYYY" -> DB: "YYYY-MM-DD")
+        birthday = naver_user_info.get("birthday")  # "10-01"
+        birthyear = naver_user_info.get("birthyear")  # "1990"
+        birth_date = f"{birthyear}-{birthday}" if birthyear and birthday else None
+
+        # 유저 정보 저장
+        user, created = await User.update_or_create(
+            provider_id=provider_id,
+            provider=ProviderChoice.NAVER,
+            defaults={
+                "email": email,
+                "real_name": real_name,
+                "nickname": nickname,
+                "profile_img_url": profile_image,  # 우선 원본 저장
+                "gender": formatted_gender,
+                "phone_number": phone_number,
+                "birth_date": birth_date,
+            },
+        )
+
+        # 프로필 이미지 처리 (기존 카카오 방식과 동일하게 S3 업로드)
+        if profile_image:
+            new_image_url = await self._process_and_upload_image(user, profile_image)
+            user.profile_img_url = new_image_url
+            await user.save()
+
+        if created:
+            await UserNoti.create(user=user)
+
+        # JWT 발급
+        return TokenResponse(
+            access_token=create_access_token(subject=user.id),
+            refresh_token=create_refresh_token(subject=user.id),
+            token_type="bearer",
+            is_new_user=created,
+        )
+
     async def process_kakao_login(self, code: str) -> TokenResponse:
         # 카카오 토큰 획득
         kakao_access_token = await kakao_client.get_access_token(code)

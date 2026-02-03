@@ -13,8 +13,8 @@ admin_app.mount(
 )
 
 settings.ADMIN_SITE_NAME = "NEAR-0.5 관리자"
-settings.ADMIN_PRIMARY_COLOR = "#1B1B1B"
+settings.ADMIN_PRIMARY_COLOR = "#333333"
 settings.ADMIN_SITE_HEADER_LOGO = f"/{settings.ADMIN_PREFIX}/custom-static/admin_logo.png"
-settings.ADMIN_SITE_SIGN_IN_LOGO = f"/{settings.ADMIN_PREFIX}/custom-static/admin_logo.png"
+settings.ADMIN_SITE_SIGN_IN_LOGO = f"/{settings.ADMIN_PREFIX}/custom-static/admin_logo_login.png"
 
 __all__ = ["admin_app"]

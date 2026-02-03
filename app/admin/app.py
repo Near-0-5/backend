@@ -39,8 +39,7 @@ admin_app.add_api_route(
     response_class=HTMLResponse,
     summary="실시간 송출 모니터링 페이지",
     description=(
-        "관리자가 방송 송출 상태를 확인하고 실시간으로 영상을 프리뷰 할 수 있는 "
-        "HTML 대시보드"
+        "관리자가 방송 송출 상태를 확인하고 실시간으로 영상을 프리뷰 할 수 있는 HTML 대시보드"
     ),
 )
 

@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import bcrypt
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
@@ -43,11 +43,9 @@ if TYPE_CHECKING:
 else:
     TortoiseModelAdmin = _RuntimeTortoiseModelAdmin
 
-F = TypeVar("F", bound=Callable[..., Any])
 
-
-def typed_display(func: F) -> F:
-    return cast(F, display(func))
+def typed_display[T: Callable[..., Any]](func: T) -> T:
+    return cast("T", display(func))
 
 
 def _ko_plural(name: str) -> str:

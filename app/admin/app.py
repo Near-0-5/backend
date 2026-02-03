@@ -32,12 +32,16 @@ async def stream_monitor_page(
         },
     )
 
+
 admin_app.add_api_route(
     "/sessions/{session_id}/monitor",
     stream_monitor_page,
     response_class=HTMLResponse,
     summary="실시간 송출 모니터링 페이지",
-    description="관리자가 방송 송출 상태를 확인하고 실시간으로 영상을 프리뷰 할 수 있는 HTML 대시보드",
+    description=(
+        "관리자가 방송 송출 상태를 확인하고 실시간으로 영상을 프리뷰 할 수 있는 "
+        "HTML 대시보드"
+    ),
 )
 
 settings.ADMIN_SITE_NAME = "NEAR0.5 관리자"

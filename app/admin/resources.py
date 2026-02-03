@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import bcrypt
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
@@ -255,7 +256,7 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         url = f"/{admin_settings.ADMIN_PREFIX}/sessions/{obj.id}/monitor"
         return url
 
-    monitor_link.short_description = "모니터링"
+    monitor_link.short_description = "모니터링"  # type: ignore[attr-defined]
 
 
 @register(ConcertArtist)

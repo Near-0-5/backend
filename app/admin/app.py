@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from fastapi.staticfiles import StaticFiles
 from fastadmin import fastapi_app as admin_app
 from fastadmin.settings import settings
+from fastapi.staticfiles import StaticFiles
 
 from app.admin import resources as _resources  # noqa: F401
 
@@ -12,7 +12,7 @@ admin_app.mount(
     name="custom-static",
 )
 
-settings.ADMIN_SITE_NAME = "NEAR-0.1 관리자"
+settings.ADMIN_SITE_NAME = "NEAR-0.5 관리자"
 settings.ADMIN_PRIMARY_COLOR = "#1B1B1B"
 settings.ADMIN_SITE_HEADER_LOGO = f"/{settings.ADMIN_PREFIX}/custom-static/admin_logo.png"
 settings.ADMIN_SITE_SIGN_IN_LOGO = f"/{settings.ADMIN_PREFIX}/custom-static/admin_logo.png"

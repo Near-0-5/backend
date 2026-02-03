@@ -1,9 +1,9 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import bcrypt
-from fastapi import HTTPException
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
 from fastadmin import register
+from fastapi import HTTPException
 
 from app.admin.models import AdminUser
 from app.domains.artists.models import Artist, Follow
@@ -24,7 +24,21 @@ from app.integrations.aws_ivs import IVSClient, IVSPlaybackProvider
 if TYPE_CHECKING:
 
     class TortoiseModelAdmin:  # pragma: no cover
-        pass
+        async def save_model(
+            self, id: int | None, payload: dict[str, Any]
+        ) -> dict[str, Any] | None: ...
+
+        async def delete_model(self, id: int) -> None: ...
+
+        def get_model_fields_with_widget_types(
+            self, with_m2m: bool | None = None, with_upload: bool | None = None
+        ) -> list[Any]: ...
+
+        def deserialize_value(self, field: Any, value: Any) -> Any: ...
+
+        async def orm_get_obj(self, id: int) -> Any | None: ...
+
+        async def serialize_obj(self, obj: Any, list_view: bool = False) -> dict[str, Any]: ...
 else:
     TortoiseModelAdmin = _RuntimeTortoiseModelAdmin
 
@@ -174,12 +188,14 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
     search_help_text = "회차명 검색"
 
     async def delete_model(self, id: int) -> None:
-        service = StreamAdminService(ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider())
-        await service.delete_session_with_infrastructure(id, user=None)
+        service = StreamAdminService(
+            ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider()
+        )
+        await service.delete_session_with_infrastructure(id, user=cast("User", None))
 
-    async def save_model(self, id: int | None, payload: dict) -> dict | None:
+    async def save_model(self, id: int | None, payload: dict[str, Any]) -> dict[str, Any] | None:
         if id is not None:
-            return await super().save_model(id, payload)
+            return cast("dict[str, Any] | None", await super().save_model(id, payload))
 
         fields = self.get_model_fields_with_widget_types(with_m2m=False, with_upload=False)
         parsed_payload = {
@@ -206,14 +222,17 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
             channel_config=ChannelConfig(),
         )
 
-        service = StreamAdminService(ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider())
-        session_res = await service.create_session_with_infrastructure(concert_id, data, user=None)
+        service = StreamAdminService(
+            ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider()
+        )
+        session_res = await service.create_session_with_infrastructure(
+            concert_id, data, user=cast("User", None)
+        )
 
         obj = await self.orm_get_obj(session_res.id)
         if not obj:
             return None
-        return await self.serialize_obj(obj)
-
+        return cast("dict[str, Any]", await self.serialize_obj(obj))
 
 
 @register(ConcertArtist)
@@ -246,8 +265,13 @@ class StreamChannelAdmin(TortoiseModelAdmin):
         channel = await StreamChannel.get_or_none(id=id)
         if not channel:
             return
-        service = StreamAdminService(ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider())
-        await service.delete_session_with_infrastructure(channel.session_id, user=None)
+        session_id = getattr(channel, "session_id", None)
+        if session_id is None:
+            return
+        service = StreamAdminService(
+            ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider()
+        )
+        await service.delete_session_with_infrastructure(int(session_id), user=cast("User", None))
 
 
 @register(StreamSession)

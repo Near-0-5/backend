@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 
 import bcrypt
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
@@ -41,6 +41,12 @@ if TYPE_CHECKING:
         async def serialize_obj(self, obj: Any, list_view: bool = False) -> dict[str, Any]: ...
 else:
     TortoiseModelAdmin = _RuntimeTortoiseModelAdmin
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def typed_display(func: F) -> F:
+    return cast(F, display(func))
 
 
 def _ko_plural(name: str) -> str:
@@ -242,7 +248,7 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
             return None
         return await self.serialize_obj(obj)
 
-    @display
+    @typed_display
     def monitor_link(self, obj: ConcertSession) -> str:
         from fastadmin.settings import settings as admin_settings
 

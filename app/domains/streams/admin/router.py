@@ -4,10 +4,8 @@ from fastapi import (
     Depends,
     Path,
     Query,
-    Request,
     status,
 )
-from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.api.deps import get_admin_user
@@ -163,4 +161,3 @@ async def get_session_ingest_data(
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> StreamIngestResponse:
     return await service.get_stream_ingest_info(session_id, user=current_admin)
-

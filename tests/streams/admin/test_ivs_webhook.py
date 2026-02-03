@@ -14,11 +14,11 @@ class TestIVSWebhookRouter:
             "id": "test-id",
             "detail-type": "IVS Stream State Change",
             "source": "aws.ivs",
+            "account": "123456789012",
             "time": "2024-01-01T00:00:00Z",
             "region": "ap-northeast-2",
             "resources": ["arn:aws:ivs:ap-northeast-2:123456789012:channel/abc"],
             "detail": {
-                "channel_arn": "arn:aws:ivs:ap-northeast-2:123456789012:channel/abc",
                 "event_name": "Stream End",
                 "stream_id": "st-123",
                 "channel_name": "test-channel",

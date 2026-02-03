@@ -1,5 +1,4 @@
 from datetime import timedelta
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -331,11 +330,23 @@ async def test_handle_ivs_webhook_stream_end_updates_status(admin_service):
     stream_hist = MagicMock(spec=StreamSession)
     stream_hist.save = AsyncMock()
 
-    payload = SimpleNamespace(
-        detail=SimpleNamespace(
-            event_name="Stream End", channel_arn="arn:channel", stream_id="stream123"
-        )
-    )
+    payload = {
+        "version": "0",
+        "id": "test-id",
+        "detail-type": "IVS Stream State Change",
+        "source": "aws.ivs",
+        "account": "123456789012",
+        "time": "2024-01-01T00:00:00Z",
+        "region": "ap-northeast-2",
+        "resources": ["arn:aws:ivs:ap-northeast-2:123456789012:channel/abc"],
+        "detail": {
+            "event_name": "Stream End",
+            "stream_id": "st-123",
+            "channel_name": "test-channel",
+        },
+    }
+
+    schema = StreamWebhookPayload.model_validate(payload)
 
     mock_channel = AsyncMock()
     mock_channel.prefetch_related.return_value = mock_channel
@@ -351,7 +362,7 @@ async def test_handle_ivs_webhook_stream_end_updates_status(admin_service):
             return_value=stream_hist,
         ),
     ):
-        await admin_service.handle_ivs_webhook(payload)
+        await admin_service.handle_ivs_webhook(schema)
 
         assert session.status == StreamStatus.ENDED
         stream_hist.save.assert_awaited_with(update_fields=["ended_at"])

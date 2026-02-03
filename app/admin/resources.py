@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import bcrypt
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
-from fastadmin import register
+from fastadmin import display, register
 from fastapi import HTTPException
 
 from app.admin.models import AdminUser
@@ -242,14 +242,14 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
             return None
         return await self.serialize_obj(obj)
 
+    @display
     def monitor_link(self, obj: ConcertSession) -> str:
         from fastadmin.settings import settings as admin_settings
 
         url = f"/{admin_settings.ADMIN_PREFIX}/sessions/{obj.id}/monitor"
-        return f'<a href="{url}" target="_blank" style="color: #007bff; font-weight: bold;">모니터링</a>'
+        return url
 
     monitor_link.short_description = "모니터링"
-    monitor_link.allow_tags = True  # HTML 렌더링 허용
 
 
 @register(ConcertArtist)

@@ -398,9 +398,9 @@ class StreamAdminService:
         IVS 상태 Webhook
         """
         detail = payload.detail
-        channel = await StreamChannel.get_or_none(channel_arn=detail.channel_arn).prefetch_related(
-            "session"
-        )
+        channel = await StreamChannel.get_or_none(
+            channel_arn=payload.resources[0]
+        ).prefetch_related("session")
         if not channel:
             return  # 알 수 없는 채널 무시
 

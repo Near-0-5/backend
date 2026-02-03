@@ -5,6 +5,7 @@ from typing import Any, Literal, ParamSpec, TypedDict, TypeVar, Unpack
 
 import boto3
 from botocore.exceptions import ClientError
+from fastapi import HTTPException
 from mypy_boto3_ivs.type_defs import (
     BatchGetChannelResponseTypeDef,
     BatchGetStreamKeyResponseTypeDef,
@@ -32,7 +33,7 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 
-def log_ivs_errors(func: Callable[P, T]) -> Callable[P, T]:  # noqa: UP047
+def ivs_errors(func: Callable[P, T]) -> Callable[P, T]:  # noqa: UP047
     """IVS API 호출 중 ClientError 발생 시 로깅 처리 데코레이터 함수"""
 
     @wraps(func)
@@ -53,8 +54,49 @@ def log_ivs_errors(func: Callable[P, T]) -> Callable[P, T]:  # noqa: UP047
                     "arguments": args[1:] if len(args) > 1 else [],  # self 제외
                     "keyword_arguments": kwargs,
                 },
+                exc_info=True,  # 스택 트레이스 포함
             )
-            raise
+
+            # 에러 코드별 HTTPException 매핑
+            if error_code == "AccessDeniedException":
+                raise HTTPException(status_code=500, detail="AWS IVS 권한이 부족합니다") from e
+
+            elif error_code == "ResourceNotFoundException":
+                raise HTTPException(
+                    status_code=404, detail=f"IVS 리소스를 찾을 수 없습니다: {error_message}"
+                ) from e
+
+            elif error_code == "LimitExceededException":
+                raise HTTPException(
+                    status_code=429, detail="IVS 리소스 생성 한도를 초과했습니다"
+                ) from e
+
+            elif error_code == "ThrottlingException":
+                raise HTTPException(
+                    status_code=429,
+                    detail="너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요",
+                ) from e
+
+            elif error_code == "ValidationException":
+                raise HTTPException(
+                    status_code=400, detail=f"잘못된 요청입니다: {error_message}"
+                ) from e
+
+            elif error_code == "ConflictException":
+                raise HTTPException(
+                    status_code=409, detail=f"리소스 충돌이 발생했습니다: {error_message}"
+                ) from e
+
+            elif error_code == "ServiceUnavailableException":
+                raise HTTPException(
+                    status_code=503, detail="AWS IVS 서비스를 일시적으로 사용할 수 없습니다"
+                ) from e
+
+            # 기타 AWS 에러
+            else:
+                raise HTTPException(
+                    status_code=500, detail=f"IVS API 호출 실패: {error_message}"
+                ) from e
 
     return wrapper
 
@@ -93,7 +135,7 @@ class IVSClient:
             self.client = boto3.client("ivs", region_name=settings.AWS_REGION)
 
     # ===================== 녹화 설정 관리 (S3) =====================
-    @log_ivs_errors
+    @ivs_errors
     def list_recording_configurations(self) -> list[RecordingConfigurationSummaryTypeDef]:
         """
         [목록] 계정에 생성된 S3 녹화 설정 목록 조회
@@ -107,7 +149,7 @@ class IVSClient:
 
     # ===================== 채널 관리 (Channels) =====================
 
-    @log_ivs_errors
+    @ivs_errors
     def create_channel(
         self,
         name: str,
@@ -137,7 +179,7 @@ class IVSClient:
 
         return self.client.create_channel(**params)
 
-    @log_ivs_errors
+    @ivs_errors
     def get_channel(self, channel_arn: str) -> GetChannelResponseTypeDef:
         """
         [조회] 단일 AWS IVS 채널 상세 조회
@@ -151,7 +193,7 @@ class IVSClient:
                 raise ValueError(f"Channel not found: {channel_arn}") from e
             raise
 
-    @log_ivs_errors
+    @ivs_errors
     def batch_get_channel(self, arns: list[str]) -> BatchGetChannelResponseTypeDef:
         """
         [조회] 여러 AWS IVS 채널 정보 조회 (최대 50개)
@@ -159,7 +201,7 @@ class IVSClient:
 
         return self.client.batch_get_channel(arns=arns)
 
-    @log_ivs_errors
+    @ivs_errors
     def list_all_channels(
         self, **filters: Unpack[ListChannelsFilters]
     ) -> list[ChannelSummaryTypeDef]:
@@ -176,7 +218,7 @@ class IVSClient:
 
         return channels
 
-    @log_ivs_errors
+    @ivs_errors
     def update_channel(
         self, channel_arn: str, **kwargs: Unpack[UpdateChannelRequestTypeDef]
     ) -> UpdateChannelResponseTypeDef:
@@ -187,7 +229,7 @@ class IVSClient:
         kwargs["arn"] = channel_arn
         return self.client.update_channel(**kwargs)
 
-    @log_ivs_errors
+    @ivs_errors
     def delete_channel(self, channel_arn: str) -> None:
         """
         [삭제] AWS IVS 채널 삭제(공연 취소)
@@ -197,7 +239,7 @@ class IVSClient:
 
     # ===================== 스트림 키 관리 (Stream Keys) =====================
 
-    @log_ivs_errors
+    @ivs_errors
     def create_stream_key(self, channel_arn: str) -> CreateStreamKeyResponseTypeDef:
         """
         [생성] 스트림 키 발급
@@ -207,7 +249,7 @@ class IVSClient:
 
         return self.client.create_stream_key(channelArn=channel_arn)
 
-    @log_ivs_errors
+    @ivs_errors
     def get_stream_key(self, arn: str) -> GetStreamKeyResponseTypeDef:
         """
         [조회] 단일 키 정보 조회
@@ -216,7 +258,7 @@ class IVSClient:
 
         return self.client.get_stream_key(arn=arn)
 
-    @log_ivs_errors
+    @ivs_errors
     def batch_get_stream_key(self, arns: list[str]) -> BatchGetStreamKeyResponseTypeDef:
         """
         [조회] 여러 스트림 키 정보 조회
@@ -224,11 +266,11 @@ class IVSClient:
 
         return self.client.batch_get_stream_key(arns=arns)
 
-    @log_ivs_errors
+    @ivs_errors
     def list_all_stream_keys(self, channel_arn: str) -> list[StreamKeySummaryTypeDef]:
         """
         [목록] 스트림 키 목록 페이지네이션
-         - 특정 채널에 속한 모든 스트림 키 목록
+        - 특정 채널에 속한 모든 스트림 키 목록
         """
 
         paginator = self.client.get_paginator("list_stream_keys")
@@ -239,7 +281,7 @@ class IVSClient:
 
         return keys
 
-    @log_ivs_errors
+    @ivs_errors
     def delete_stream_key(self, arn: str) -> None:
         """
         [삭제] 스트림 키 폐기(삭제)
@@ -249,7 +291,7 @@ class IVSClient:
 
     # ===================== 스트림 상태 및 제어 =====================
 
-    @log_ivs_errors
+    @ivs_errors
     def get_stream_health(self, channel_arn: str) -> GetStreamResponseTypeDef | None:
         """
         [상태] 실시간 송출 상태 확인
@@ -267,7 +309,7 @@ class IVSClient:
             # 처리x 에러 rasie해서 데코레이터가 로깅
             raise
 
-    @log_ivs_errors
+    @ivs_errors
     def list_live_streams(
         self, **filters: Unpack[ListLiveSteamsFilters]
     ) -> list[StreamSummaryTypeDef]:
@@ -283,7 +325,7 @@ class IVSClient:
             streams.extend(page.get("streams", []))
         return streams
 
-    @log_ivs_errors
+    @ivs_errors
     def stop_stream(self, channel_arn: str) -> None:
         """
         [제어] 라이브 스트림을 강제 송출 중단
@@ -299,7 +341,7 @@ class IVSClient:
 
     # ===================== 스트림 세션 및 통계 =====================
 
-    @log_ivs_errors
+    @ivs_errors
     def list_stream_sessions(self, channel_arn: str) -> list[StreamSessionSummaryTypeDef]:
         """
         [목록] 특정 채널의 과거 방송 세션 목록 조회
@@ -325,7 +367,7 @@ class IVSClient:
 
         return sessions
 
-    @log_ivs_errors
+    @ivs_errors
     def get_stream_session(
         self, channel_arn: str, stream_id: str
     ) -> GetStreamSessionResponseTypeDef:

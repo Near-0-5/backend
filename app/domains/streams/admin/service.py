@@ -1,13 +1,12 @@
-from typing import Literal, cast
+from contextlib import suppress
 
-from botocore.exceptions import ClientError
 from fastapi import HTTPException
-from mypy_boto3_ivs.type_defs import GetStreamResponseTypeDef
+from mypy_boto3_ivs.type_defs import CreateChannelResponseTypeDef, GetStreamResponseTypeDef
+from tortoise.transactions import in_transaction
 
 from app.core.config import now_kst, settings
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
-from app.core.utils.permissions import AdminPermission
 from app.domains.artists.models import Artist
 from app.domains.concerts.models import Concert
 from app.domains.notifications.tasks import (
@@ -16,11 +15,14 @@ from app.domains.notifications.tasks import (
     schedule_session_notifications,
 )
 from app.domains.streams.admin.schemas import (
+    ChannelConfig,
     IVSChannelSummary,
+    IVSUpdateConfig,
     SessionCreateRequest,
+    SessionListItem,
+    SessionListResponse,
     SessionResponse,
     SessionUpdateRequest,
-    StreamIngestInfo,
     StreamIngestResponse,
     StreamLiveMetrics,
     StreamWebhookPayload,
@@ -44,168 +46,336 @@ class StreamAdminService:
         self.playback_provider = playback_provider
         self.image_resizer = ImageResizer()
 
-    # ================================ IVS 상태 웹훅 ===================================
-    async def handle_ivs_webhook(self, payload: StreamWebhookPayload) -> None:
-        detail = payload.detail
-        event_name = detail.event_name  # "Stream Start" | "Stream End"
-        channel_arn = detail.channel_arn
-        stream_id = detail.stream_id
+    # ==============================================================================================
+    async def _get_concert_or_raise(self, concert_id: int) -> Concert:
+        """콘서트 조회"""
+        concert = await Concert.get_or_none(id=concert_id)
+        if not concert:
+            raise HTTPException(404, f"Concert {concert_id} not found")
+        return concert
 
-        # 채널 찾기
-        channel = await StreamChannel.get_or_none(channel_arn=channel_arn).prefetch_related(
-            "session"
+    async def _get_session_with_channel_or_raise(self, session_id: int) -> ConcertSession:
+        """콘서트 세션 + 연결된 IVS Channel 조회"""
+        session = await ConcertSession.get_or_none(id=session_id).prefetch_related(
+            "stream_channel", "concert"
         )
+        if not session:
+            raise HTTPException(404, f"Concert Session {session_id} not found")
+        return session
+
+    async def _validate_and_get_artists(self, artist_ids: list[int] | None) -> list[Artist]:
+        """출연 아티스트 검증"""
+        if not artist_ids:
+            return []
+
+        artists = await Artist.filter(id__in=artist_ids)
+
+        if len(artists) != len(artist_ids):
+            found_ids = {a.id for a in artists}
+            missing = set(artist_ids) - found_ids
+            raise HTTPException(404, f"Artist(s) {missing} not found")
+
+        return list(artists)
+
+    def _create_ivs_channel_infra(
+        self, session: ConcertSession, config: ChannelConfig
+    ) -> CreateChannelResponseTypeDef:
+        """AWS IVS 채널 생성 API 호출"""
+
+        return self.ivs_client.create_channel(
+            name=f"session-{session.id}",
+            latency_mode=config.latency_mode.value,
+            channel_type=config.channel_type.value,
+            authorized=(session.access_level != AccessLevel.PUBLIC),
+        )
+
+    def _update_ivs_channel_infra(
+        self, session: ConcertSession, channel: StreamChannel, config: IVSUpdateConfig
+    ) -> None:
+        """AWS IVS 채널 설정 업데이트 API 호출"""
+
+        self.ivs_client.update_channel(
+            channel_arn=channel.channel_arn,  # type: ignore[call-arg]
+            name=f"session-{session.id}",
+            latencyMode=(
+                config.latency_mode.value if config.latency_mode else channel.latency_mode.value
+            ),
+            type=(config.channel_type.value if config.channel_type else channel.type.value),
+            authorized=(session.access_level != AccessLevel.PUBLIC),
+        )
+
+    async def _sync_and_get_health(
+        self, session: ConcertSession, channel: StreamChannel
+    ) -> tuple[StreamStatus, GetStreamResponseTypeDef | None]:
+        """AWS 실시간 상태 동기화 metrics 확보"""
+        stream_res = self.ivs_client.get_stream_health(channel.channel_arn)
+        is_live = stream_res is not None and "stream" in stream_res
+
+        new_status = StreamStatus.LIVE if is_live else StreamStatus.READY
+
+        if session.status != StreamStatus.ENDED and session.status != new_status:
+            session.status = new_status
+            await session.save(update_fields=["status"])
+
+        return session.status, stream_res
+
+    async def _cleanup_on_failure(
+        self, session_id: int | None, channel_arn: str | None = None
+    ) -> None:
+        """실패 시 롤백 - 인프라, DB 데이터 삭제"""
+
+        if channel_arn:
+            try:
+                self.ivs_client.delete_channel(channel_arn)
+            except Exception as e:
+                logger.error(f"Cleanup AWS failed : {e}")
+
+        if session_id:
+            await ConcertSession.filter(id=session_id).delete()
+
+    def _map_channel_summary(self, channel: StreamChannel | None) -> IVSChannelSummary | None:
         if not channel:
-            return  # 알 수 없는 채널 무시
+            return None
 
-        session: ConcertSession = channel.session
-        now = now_kst()
+        return IVSChannelSummary(
+            arn=channel.channel_arn,
+            ingest_endpoint=channel.ingest_endpoint,
+            playback_url=channel.playback_url,
+            latency_mode=channel.latency_mode,
+            type=channel.type,
+        )
 
-        # 방송 시작 (Stream Start)
-        if event_name == "Stream Start":
-            # 상태 변경
-            session.status = StreamStatus.LIVE
-            await session.save(update_fields=["status"])
+    def _map_to_session_response(
+        self, session: ConcertSession, channel: StreamChannel | None, raw_key: str | None = None
+    ) -> SessionResponse:
+        """SessionResponse 스키마로 변환"""
 
-            # 스트리밍 이력 생성
-            if stream_id:
-                await StreamSession.create(session=session, stream_id=stream_id, started_at=now)
+        return SessionResponse(
+            id=session.id,
+            session_name=session.session_name,
+            access_level=session.access_level,
+            start_at=session.start_at,
+            status=session.status,
+            channel=self._map_channel_summary(channel),
+            value=raw_key or (channel.get_stream_key() if channel else None),
+        )
 
-            # 라이브 시작 알림 즉시 발송 트리거
-            dispatch_due_notifications.delay()
+    def _map_to_session_list_item(
+        self,
+        session: ConcertSession,
+        *,
+        display_status: StreamStatus,
+    ) -> SessionListItem:
+        concert = session.concert
 
-        # 방송 종료 (Stream End)
-        elif event_name == "Stream End":
-            # 종료 상태 처리 (예정 종료 시간이 지났으면 ENDED, 아니면 READY)
-            if session.end_at and now > session.end_at:
-                session.status = StreamStatus.ENDED
-            else:
-                session.status = StreamStatus.READY
+        return SessionListItem(
+            id=session.id,
+            concert_title=concert.title,
+            session_name=session.session_name,
+            thumbnail_url=concert.thumbnail_url,
+            category=concert.category,
+            status=display_status,
+            start_at=session.start_at,
+        )
 
-            await session.save(update_fields=["status"])
+    def _map_to_ingest_response(
+        self,
+        session: ConcertSession,
+        channel: StreamChannel,
+        stream_res: GetStreamResponseTypeDef | None,
+        playback_token: str | None = None,
+    ) -> StreamIngestResponse:
+        """StreamIngestResponse 스키마로 변환"""
 
-            # 이력 종료 시간 기록
-            if stream_id:
-                stream_session = await StreamSession.get_or_none(stream_id=stream_id)
-                if stream_session:
-                    stream_session.ended_at = now
-                    await stream_session.save(update_fields=["ended_at"])
+        stream = stream_res.get("stream") if stream_res else None
 
-    # ================================ 세션 관리 =====================================
+        live_metrics = None
+        if stream:
+            from datetime import datetime
+
+            live_metrics = StreamLiveMetrics(
+                health=stream.get("health"),
+                viewer_count=stream.get("viewerCount"),
+                start_time=stream.get("startTime", datetime.now()),  # 기본값 처리
+                state=stream.get("state", "LIVE"),  # 기본 LIVE
+            )
+
+        return StreamIngestResponse.model_validate(
+            {
+                "session_id": session.id,
+                "session_name": session.session_name,
+                "is_live": stream is not None,
+                "concert_title": session.concert.title,
+                "playback_url": channel.playback_url,
+                "playback_token": playback_token,
+                "ingest_info": {
+                    "ingest_endpoint": channel.ingest_endpoint,
+                    "value": channel.get_stream_key(),
+                },
+                "live_metrics": live_metrics,
+            }
+        )
+
+    # ==============================================================================================
     async def create_session_with_infrastructure(
         self, concert_id: int, data: SessionCreateRequest, user: User
     ) -> SessionResponse:
         """
         [Admin] 콘서트 세션 생성 및 AWS IVS 채널 자동 발급
         """
-        # 권한 체크
-        AdminPermission.must_be_admin(user)
+        # 콘서트, 아티스트 검증
+        concert = await self._get_concert_or_raise(concert_id)
+        artists = await self._validate_and_get_artists(data.artist_ids)
 
-        # Concert 있나 확인
-        concert = await Concert.get(id=concert_id)
+        async with in_transaction():
+            # channel_config는 IVS 설정용이므로 DB 모델 생성시에는 제외
+            session = await ConcertSession.create(
+                concert=concert, **data.model_dump(exclude={"channel_config", "artist_ids"})
+            )
+            for artist in artists:
+                await ConcertArtist.create(session=session, artist=artist)
 
-        # 콘서트 세션 (실제 회차) 생성
-        # channel_config는 IVS 설정용이므로 DB 모델 생성시에는 제외
-        session_dict = data.model_dump(exclude={"channel_config", "artist_ids"})
-        session = await ConcertSession.create(concert=concert, **session_dict)
-
+        created_arn = None
         try:
-            # 출연 아티스트 매핑
-            if data.artist_ids:
-                artists = await Artist.filter(id__in=data.artist_ids)
-                if len(artists) != len(data.artist_ids):
-                    found_ids = {a.id for a in artists}
-                    missing = set(data.artist_ids) - found_ids
-                    raise HTTPException(
-                        status_code=400, detail=f"존재하지 않는 아티스트: {missing}"
-                    )
+            ivs_res = self._create_ivs_channel_infra(session, data.channel_config)
+            created_arn = ivs_res["channel"]["arn"]
+            raw_key = ivs_res["streamKey"]["value"]
 
+            channel = StreamChannel(
+                session=session,
+                channel_arn=created_arn,
+                ingest_endpoint=ivs_res["channel"]["ingestEndpoint"],
+                playback_url=ivs_res["channel"]["playbackUrl"],
+                latency_mode=data.channel_config.latency_mode,
+                type=data.channel_config.channel_type,
+                is_private=(session.access_level != AccessLevel.PUBLIC),
+            )
+            channel.set_stream_key(raw_key)
+            await channel.save()
+
+            schedule_session_notifications.delay(session.id)
+
+            return self._map_to_session_response(session, channel, raw_key)
+
+        except HTTPException:
+            await self._cleanup_on_failure(session.id, created_arn)
+            raise
+
+        except Exception as e:  # 그 외 에러
+            await self._cleanup_on_failure(session.id, created_arn)
+            logger.exception("Unexpected error during session creation")
+            raise HTTPException(500, "IVS Channel creation failed") from e
+
+    async def update_session_infrastructure(
+        self, session_id: int, data: SessionUpdateRequest, user: User
+    ) -> SessionResponse:
+        """
+        [Admin] 콘서트 세션 수정
+        """
+        session = await self._get_session_with_channel_or_raise(session_id)
+        channel = session.stream_channel
+        start_at_before = session.start_at
+
+        async with in_transaction():
+            # 아티스트 동기화
+            if data.artist_ids is not None:
+                artists = await self._validate_and_get_artists(data.artist_ids)
+                await ConcertArtist.filter(session=session).delete()
                 for artist in artists:
                     await ConcertArtist.create(session=session, artist=artist)
 
-            # IVS 채널 생성 호출 (예외 처리 추가)
-            config = data.channel_config
-
-            ivs_res = self.ivs_client.create_channel(
-                name=f"session-{session.id}",
-                latency_mode=config.latency_mode.value,
-                channel_type=config.channel_type.value,
-                authorized=(session.access_level != AccessLevel.PUBLIC),
+            # 세션 정보 업데이트
+            update_dict = data.model_dump(
+                exclude={"channel_config", "artist_ids"}, exclude_unset=True
             )
+            for key, value in update_dict.items():
+                setattr(session, key, value)
 
-            # DB 저장 시 필드명 snake_case 맞춤
-            channel_arn = ivs_res["channel"]["arn"]
-            stream_key_raw = ivs_res["streamKey"]["value"]
+            await session.save()
 
-            # 채널 정보 DB 저장
-            try:
-                channel = StreamChannel(
-                    session=session,
-                    type=config.channel_type,
-                    latency_mode=config.latency_mode,
-                    channel_arn=channel_arn,
-                    ingest_endpoint=ivs_res["channel"]["ingestEndpoint"],
-                    playback_url=ivs_res["channel"]["playbackUrl"],
-                    is_private=(session.access_level != AccessLevel.PUBLIC),
-                )
-                channel.set_stream_key(stream_key_raw)
-                await channel.save()
+        # 인프라 설정 변경
+        if data.channel_config and channel:
+            self._update_ivs_channel_infra(session, channel, data.channel_config)
 
-            except Exception as db_error:
-                # DB 저장 실패 시 AWS에 생성된 채널 삭제 (Cleanup)
-                self.ivs_client.delete_channel(channel_arn)
-                await session.delete()
-                raise HTTPException(
-                    status_code=500, detail=f"DB 저장 실패로 인프라를 롤백했습니다: {str(db_error)}"
-                ) from db_error
+            # DB 채널 상태 동기화
+            if data.channel_config.latency_mode:
+                channel.latency_mode = data.channel_config.latency_mode
+            if data.channel_config.channel_type:
+                channel.type = data.channel_config.channel_type
+            channel.is_private = session.access_level != AccessLevel.PUBLIC
+            await channel.save()
 
-        except HTTPException:
-            if "session" in locals() and session.id:
-                await session.delete()
-            raise
+        if data.start_at and data.start_at != start_at_before:
+            reschedule_session_notifications.delay(session.id)
 
-        except Exception as e:
-            # IVS 세팅 실패했으면 콘서트 세션 삭제
-            if "session" in locals() and session.id:
-                await session.delete()
-            # AWS 권한 에러
-            if (
-                isinstance(e, ClientError)
-                and e.response["Error"]["Code"] == "AccessDeniedException"
-            ):
-                raise HTTPException(500, "AWS 권한 부족") from e
+        return self._map_to_session_response(session, channel)
 
-            # 그 외 모든 에러
-            raise HTTPException(500, f"IVS 채널 생성 실패: {str(e)}") from e
-
-        from app.domains.streams.admin.schemas import IVSChannelSummary
-
-        schedule_session_notifications.delay(session.id)
-
-        return SessionResponse(
-            id=session.id,
-            session_name=session.session_name,
-            access_level=session.access_level,
-            status=session.status,
-            start_at=session.start_at,
-            channel=IVSChannelSummary(
-                arn=channel.channel_arn,
-                ingest_endpoint=channel.ingest_endpoint,
-                playback_url=channel.playback_url,
-                latency_mode=channel.latency_mode,
-                type=channel.type,
-            ),
-            value=stream_key_raw,  # 생성 시점에만 평문 노출
+    async def list_sessions_admin(
+        self,
+        user: User,
+        limit: int = 20,
+        cursor: int | None = None,
+    ) -> SessionListResponse:
+        """
+        [Admin] 라이브 방송 목록 조회
+        """
+        queryset = ConcertSession.all().prefetch_related("stream_channel", "concert")
+        sessions, next_cursor = await paginate_cursor(
+            queryset=queryset, cursor=cursor, limit=limit, order_by="-id"
         )
+        items = [self._map_to_session_list_item(s, display_status=s.status) for s in sessions] or []
+        return SessionListResponse(items=items, next_cursor=next_cursor)
+
+    async def get_session_admin_detail(self, session_id: int, user: User) -> SessionResponse:
+        """
+        [Admin] 콘서트 세션 상세 조회
+        """
+        session = await self._get_session_with_channel_or_raise(session_id)
+        channel = session.stream_channel
+        if not channel:
+            raise HTTPException(404, f"Channel {channel.id} not found")
+
+        return self._map_to_session_response(session, channel)
+
+    async def delete_session_with_infrastructure(self, session_id: int, user: User) -> None:
+        """
+        [Admin] 세션 삭제 및 연결된 IVS 채널 영구 제거
+        """
+        session = await self._get_session_with_channel_or_raise(session_id)
+        channel = getattr(session, "stream_channel", None)
+
+        if channel:
+            try:
+                self.ivs_client.delete_channel(channel.channel_arn)
+            except Exception as e:
+                logger.warning(f"AWS Delete Fail: {e}")
+
+            await session.delete()
+
+    async def stop_stream_session(self, session_id: int, user: User) -> None:
+        """
+        [Admin] 라이브 방송 강제 중단 및 상태 종료 처리
+        """
+
+        session = await self._get_session_with_channel_or_raise(session_id)
+        if not session.stream_channel:
+            raise HTTPException(404, f"Session {session_id} not found")
+
+        with suppress(Exception):
+            self.ivs_client.stop_stream(session.stream_channel.channel_arn)
+
+        session.status = StreamStatus.ENDED
+        await session.save(update_fields=["status"])
 
     async def rotate_stream_key(self, session_id: int, user: User) -> str:
         """
         [Admin] 스트림 키 유출 시 재발급
         """
-        AdminPermission.must_be_admin(user)
 
-        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
+        session = await self._get_session_with_channel_or_raise(session_id)
         channel = session.stream_channel
+        if not channel:
+            raise HTTPException(404, f"Channel {channel.id} not found")
 
         # 스트림 키 삭제
         existing_keys = self.ivs_client.list_all_stream_keys(channel.channel_arn)
@@ -222,299 +392,69 @@ class StreamAdminService:
 
         return new_key_raw
 
-    async def delete_session_with_infrastructure(self, session_id: int, user: User) -> None:
+    # ==============================================================================================
+    async def handle_ivs_webhook(self, payload: StreamWebhookPayload) -> None:
         """
-        [Admin] 세션 삭제 및 연결된 IVS 채널 영구 제거
+        IVS 상태 Webhook
         """
-        AdminPermission.must_be_admin(user)
-
-        # 채널 정보 조회를 위해 관계 로드
-        session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
-        if not session:
-            raise HTTPException(404, "존재하지 않는 세션입니다.")
-
-        # IVS 채널 삭제
-        if hasattr(session, "stream_channel") and session.stream_channel:
-            try:
-                self.ivs_client.delete_channel(session.stream_channel.channel_arn)
-            except Exception as e:
-                # 이미 AWS에서 지워졌을 수도 있으니까
-                logger.warning(f"AWS 채널 삭제 실패(이미 제거되었을 수 있음): {str(e)}")
-
-            # DB 삭제
-            await session.delete()
-
-    async def stop_stream_session(self, session_id: int, user: User) -> None:
-        """
-        [Admin] 라이브 방송 강제 중단 및 상태 종료 처리
-        """
-        AdminPermission.must_be_admin(user)
-
-        session = await ConcertSession.get(id=session_id).prefetch_related("stream_channel")
-        channel = session.stream_channel
-
+        detail = payload.detail
+        channel = await StreamChannel.get_or_none(channel_arn=detail.channel_arn).prefetch_related(
+            "session"
+        )
         if not channel:
-            raise HTTPException(404, "연결된 스트리밍 채널이 없습니다.")
+            return  # 알 수 없는 채널 무시
 
-        # IVS 송출 강제 중단
-        try:
-            self.ivs_client.stop_stream(channel.channel_arn)
-        except Exception as e:
-            # 방송 중이 아닐 때 stop 호출하면 안되니까
-            logger.warning(f"AWS StopStream 호출 실패(이미 종료되었을 수 있음): {str(e)}")
+        session: ConcertSession = channel.session
+        now = now_kst()
 
-        # DB 상태 업데이트
-        session.status = StreamStatus.ENDED
-        await session.save(update_fields=["status"])
+        # 방송 시작 (Stream Start)
+        if detail.event_name == "Stream Start":
+            session.status = StreamStatus.LIVE
+            await session.save(update_fields=["status"])
+            # 스트리밍 이력 생성
+            await StreamSession.create(session=session, stream_id=detail.stream_id, started_at=now)
+            dispatch_due_notifications.delay()  # 라이브 시작 알림
 
-    async def list_sessions_admin(
-        self, user: User, limit: int = 20, cursor: int | None = None
-    ) -> tuple[list[SessionResponse], int | None]:
-        """
-        [Admin] 라이브 방송 목록 조회
-        """
-        AdminPermission.must_be_admin(user)
-
-        # DB 조회
-        queryset = ConcertSession.all().prefetch_related("stream_channel", "concert")
-        sessions, next_cursor = await paginate_cursor(
-            queryset=queryset, limit=limit, cursor=cursor, order_by="-id"
-        )
-
-        # ENDED가 아닌 세션의 채널 ARN만 수집
-        active_channel_arns = {
-            s.stream_channel.channel_arn
-            for s in sessions
-            if hasattr(s, "stream_channel") and s.stream_channel and s.status != StreamStatus.ENDED
-        }
-        # 활성 채널만 AWS에 조회
-        live_channel_arns = set()
-        if active_channel_arns:
-            try:
-                # 건강 상태 확인
-                live_streams = self.ivs_client.list_live_streams()
-                live_channel_arns = {
-                    s["channelArn"] for s in live_streams if s["channelArn"] in active_channel_arns
-                }
-            except Exception:
-                pass  # AWS 조회 실패해도 DB 목록은 보여줌
-
-        results = []
-        for s in sessions:
-            channel = getattr(s, "stream_channel", None)
-
-            # DB는 READY지만 AWS에서 실제 송출 중이라면 LIVE로 표시
-            display_status = s.status
-            if (
-                channel
-                and (channel.channel_arn in live_channel_arns)
-                and s.status != StreamStatus.ENDED
-            ):
-                display_status = StreamStatus.LIVE
-
-            results.append(
-                SessionResponse(
-                    id=s.id,
-                    session_name=s.session_name,
-                    access_level=s.access_level,
-                    start_at=s.start_at,
-                    status=display_status,
-                    channel=IVSChannelSummary(
-                        arn=channel.channel_arn,
-                        ingest_endpoint=channel.ingest_endpoint,
-                        playback_url=channel.playback_url,
-                        latency_mode=channel.latency_mode,
-                        type=channel.type,
-                    )
-                    if channel
-                    else None,
-                )
-            )
-
-        return results, next_cursor
-
-    async def get_session_admin_detail(self, session_id: int, user: User) -> SessionResponse:
-        """
-        [Admin] 콘서트 세션 상세 조회
-        """
-        AdminPermission.must_be_admin(user)
-        session = await ConcertSession.get_or_none(id=session_id).prefetch_related("stream_channel")
-        if not session:
-            raise HTTPException(404, "해당 콘서트 세션을 찾을 수 없습니다.")
-
-        channel = getattr(session, "stream_channel", None)
-
-        return SessionResponse(
-            id=session.id,
-            session_name=session.session_name,
-            access_level=session.access_level,
-            start_at=session.start_at,
-            status=session.status,
-            channel=IVSChannelSummary(
-                arn=channel.channel_arn,
-                ingest_endpoint=channel.ingest_endpoint,
-                playback_url=channel.playback_url,
-                latency_mode=channel.latency_mode,
-                type=channel.type,
-            )
-            if channel
-            else None,
-        )
-
-    async def update_session_infrastructure(
-        self, session_id: int, data: SessionUpdateRequest, user: User
-    ) -> SessionResponse:
-        """
-        [Admin] 콘서트 세션 수정
-        """
-        AdminPermission.must_be_admin(user)
-
-        # 동시 수정 방지 Lock
-        session = (
-            await ConcertSession.filter(id=session_id)
-            .select_for_update()
-            .prefetch_related("stream_channel")
-            .first()
-        )
-        if not session:
-            raise HTTPException(404, "해당 콘서트 세션을 찾을 수 없습니다.")
-
-        channel = getattr(session, "stream_channel", None)
-        start_at_before = session.start_at
-
-        # DB 수정
-        update_dict = data.model_dump(exclude={"channel_config", "artist_ids"}, exclude_unset=True)
-        for key, value in update_dict.items():
-            setattr(session, key, value)
-
-        # 아티스트 정보 수정
-        if data.artist_ids is not None:
-            # 기존 매핑 삭제 후 재생성
-            await ConcertArtist.filter(session=session).delete()
-            if data.artist_ids:
-                artists = await Artist.filter(id__in=data.artist_ids)
-                for artist in artists:
-                    await ConcertArtist.create(session=session, artist=artist)
-
-        # AWS IVS 채널 설정 동기화
-        if data.channel_config and channel:
-            config = data.channel_config
-
-            # Private 여부 결정
-            current_access = update_dict.get("access_level", session.access_level)
-            is_private = current_access != AccessLevel.PUBLIC
-
-            # 변경할 값 확인 (없으면 기존 값 유지)
-            new_latency = cast(
-                "Literal['LOW', 'NORMAL']",
-                config.latency_mode.value if config.latency_mode else channel.latency_mode.value,
-            )
-            new_type = cast(
-                "Literal['ADVANCED_HD', 'ADVANCED_SD', 'BASIC', 'STANDARD']",
-                config.channel_type.value if config.channel_type else channel.type.value,
-            )
-
-            # AWS API 호출
-            self.ivs_client.update_channel(
-                channel_arn=channel.channel_arn,  # type: ignore
-                name=f"session-{session.id}",  # 이름 강제 동기화
-                latencyMode=new_latency,
-                type=new_type,
-                authorized=is_private,
-            )
-
-            # DB 채널 정보 업데이트
-            if config.latency_mode:
-                channel.latency_mode = config.latency_mode
-            if config.channel_type:
-                channel.type = config.channel_type
-            channel.is_private = is_private
-            await channel.save()
-
-        await session.save()
-
-        if data.start_at is not None and data.start_at != start_at_before:
-            reschedule_session_notifications.delay(session.id)
-
-        # 업데이트된 정보로 다시 조회하여 반환
-        return await self.get_session_admin_detail(session_id, user)
-
-    async def _sync_session_status_with_aws(
-        self, session: ConcertSession, channel: StreamChannel
-    ) -> tuple[StreamStatus, GetStreamResponseTypeDef | None]:
-        """AWS 실시간 상태와 DB 상태 동기화"""
-        stream_res = self.ivs_client.get_stream_health(channel.channel_arn)
-        is_live = stream_res is not None and "stream" in stream_res
-
-        new_status = StreamStatus.LIVE if is_live else StreamStatus.READY
-
-        # ENDED 상태는 보존
-        if session.status != StreamStatus.ENDED and session.status != new_status:
-            session.status = new_status
+        # 방송 종료 (Stream End)
+        elif detail.event_name == "Stream End":
+            session.status = (
+                StreamStatus.ENDED
+            )  # if (session.end_at and now > session.end_at) else StreamStatus.READY
             await session.save(update_fields=["status"])
 
-        return session.status, stream_res
+            stream_hist = await StreamSession.get_or_none(stream_id=detail.stream_id)
+            if stream_hist:
+                stream_hist.ended_at = now
+                await stream_hist.save(update_fields=["ended_at"])
 
-    # ================================= ivs 송출 테스트용  =================================
+    async def reopen_session(self, session_id: int, user: User) -> None:
+        """관리자가 종료된 세션을 다시 활성화"""
+        session = await self._get_session_with_channel_or_raise(session_id)
 
+        if session.status != StreamStatus.ENDED:
+            raise HTTPException(400, f"Only ENDED sessions can be reactivated: {session.status}")
+        session.status = StreamStatus.READY
+        await session.save(update_fields=["status"])
+
+    # ==============================================================================================
     async def get_stream_ingest_info(self, session_id: int, user: User) -> StreamIngestResponse:
         """
         [Admin] 송출 상세 정보 조회, 실시간 상태 확인
         """
-        # 관리자 권한 체크
-        AdminPermission.must_be_admin(user)
-
-        # DB 조회
-        session = await ConcertSession.get(id=session_id).prefetch_related(
-            "stream_channel", "concert"
-        )
+        session = await self._get_session_with_channel_or_raise(session_id)
         channel = session.stream_channel
-
         if not channel:
-            raise HTTPException(404, "해당 세션에 연결된 IVS 채널이 없습니다.")
+            raise HTTPException(404, f"Channel {channel.id} not found")
+
+        # AWS IVS 헬스체크
+        _, stream_res = await self._sync_and_get_health(session, channel)
 
         playback_token = None
-
-        # 채널이 비공개(Private) 설정이 되어 있다면 토큰을 발급합니다.
         if channel.is_private:
             playback_token = self.playback_provider.sign_playback_token(
                 channel_arn=channel.channel_arn,
-                viewer_id=f"admin-{user.id}",
-                duration_sec=settings.ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC,  # 10분
+                viewer_id=f"id: {user.id}",
+                duration_sec=settings.ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC,
             )
 
-        # AWS IVS 헬스체크(방송 중 아니면 None)
-        stream_res = self.ivs_client.get_stream_health(channel.channel_arn)
-        is_live = stream_res is not None and "stream" in stream_res
-
-        # DB 상태 동기화(AWS는 LIVE인데 DB가 READY면 업데이트)
-        new_status = StreamStatus.LIVE if is_live else StreamStatus.READY
-
-        # 이미 종료된 방송(ENDED)은 함부로 바꾸지 않도록 방어
-        if session.status != StreamStatus.ENDED and session.status != new_status:
-            session.status = new_status
-            await session.save(update_fields=["status"])
-
-        # 방송 중 실시간 메트릭 구성
-        live_metrics = None
-        if is_live and stream_res:
-            s = stream_res["stream"]
-            live_metrics = StreamLiveMetrics(
-                health=s.get("health"),  # HEALTHY, STARVING, UNKNOWN
-                viewer_count=s.get("viewerCount", 0),
-                start_time=s.get("startTime"),
-                state=s.get("state"),
-            )
-
-        return StreamIngestResponse(
-            session_id=session.id,
-            is_live=is_live,
-            concert_title=session.concert.title,
-            ingest_info=StreamIngestInfo(
-                ingest_endpoint=channel.ingest_endpoint,  # OBS 서버 (rtmps://)
-                value=channel.get_stream_key(),  # OBS 스트림 키 (복호화)
-            ),
-            playback_url=channel.playback_url,
-            playback_token=playback_token,
-            live_metrics=live_metrics,
-        )
+        return self._map_to_ingest_response(session, channel, stream_res, playback_token)

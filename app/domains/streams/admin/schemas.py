@@ -29,7 +29,7 @@ class ChannelConfig(BaseModel):
 class StreamLiveMetrics(BaseModel):
     model_config = COMMON_CONFIG
     health: str = Field(..., description="스트림 건강 상태 (HEALTHY, STARVING, UNKNOWN)")
-    viewer_count: int = Field(..., description="현재 동시 시청자 수")
+    viewer_count: int | None = Field(..., description="현재 동시 시청자 수")
     start_time: datetime | None = Field(None, description="방송 시작 시각")
     state: str = Field(..., description="LIVE 상태")
 
@@ -111,6 +111,29 @@ class SessionResponse(BaseModel):
     )
 
 
+class SessionListItem(BaseModel):
+    """세션 목록"""
+
+    model_config = COMMON_CONFIG
+
+    id: int
+    concert_title: str
+    session_name: str
+    thumbnail_url: str | None
+    category: str
+    status: StreamStatus
+    start_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    """세션 목록 응답"""
+
+    model_config = COMMON_CONFIG
+
+    items: list[SessionListItem]
+    next_cursor: int | None
+
+
 class StreamIngestResponse(BaseModel):
     """송출 OBS 응답"""
 
@@ -118,6 +141,7 @@ class StreamIngestResponse(BaseModel):
     session_id: int
     is_live: bool
     concert_title: str
+    session_name: str
     ingest_info: StreamIngestInfo
     playback_url: str
     playback_token: str | None = None

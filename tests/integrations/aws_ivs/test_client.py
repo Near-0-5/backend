@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError
+from fastapi import HTTPException
 
 from app.integrations.aws_ivs.client import IVSClient
 
@@ -152,8 +153,10 @@ class TestChannelManagement:
         error_response = {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}
         ivs_client.client.get_channel.side_effect = ClientError(error_response, "GetChannel")
 
-        with pytest.raises(ClientError):
+        with pytest.raises(HTTPException) as exc:
             ivs_client.get_channel("arn:channel:123")
+
+        assert exc.value.status_code == 500
 
     def test_batch_get_channel(self, ivs_client):
         """여러 채널 조회"""
@@ -308,11 +311,13 @@ class TestStreamHealthAndControl:
 
     def test_get_stream_health_other_error(self, ivs_client):
         """스트림 상태 조회 - 기타 에러"""
-        error_response = {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}
+        error_response = {"Error": {"Code": "AccessDeniedException", "Message": "Access denied"}}
         ivs_client.client.get_stream.side_effect = ClientError(error_response, "GetStream")
 
-        with pytest.raises(ClientError):
+        with pytest.raises(HTTPException) as exc:
             ivs_client.get_stream_health("arn:channel:123")
+
+        assert exc.value.status_code == 500
 
     def test_list_live_streams(self, ivs_client):
         """라이브 스트림 목록 조회"""
@@ -366,11 +371,13 @@ class TestStreamHealthAndControl:
 
     def test_stop_stream_other_error(self, ivs_client):
         """스트림 중단 - 기타 에러"""
-        error_response = {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}
+        error_response = {"Error": {"Code": "AccessDeniedException", "Message": "Access denied"}}
         ivs_client.client.stop_stream.side_effect = ClientError(error_response, "StopStream")
 
-        with pytest.raises(ClientError):
+        with pytest.raises(HTTPException) as exc:
             ivs_client.stop_stream("arn:channel:123")
+
+        assert exc.value.status_code == 500
 
 
 class TestStreamSessions:

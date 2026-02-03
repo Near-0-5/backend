@@ -5,7 +5,6 @@ from fastapi import (
     Path,
     Query,
     Request,
-    Response,
     status,
 )
 from fastapi.responses import HTMLResponse
@@ -15,6 +14,7 @@ from app.api.deps import get_admin_user
 from app.domains.streams import deps as streams_deps
 from app.domains.streams.admin.schemas import (
     SessionCreateRequest,
+    SessionListResponse,
     SessionResponse,
     SessionUpdateRequest,
     StreamIngestResponse,
@@ -49,24 +49,18 @@ async def create_concert_stream(
 
 @router.get(
     "/sessions",
-    response_model=list[SessionResponse],
+    response_model=SessionListResponse,
     summary="콘서트 세션 목록 조회",
     description="모든 콘서트 세션을 조회합니다. \
     AWS IVS의 현재 라이브 상태를 실시간으로 확인하여 목록에 반영합니다.",
 )
 async def list_concert_sessions(
-    response: Response,
     cursor: int | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
-) -> list[SessionResponse]:
-    sessions, next_cursor = await service.list_sessions_admin(current_admin, limit, cursor)
-
-    if next_cursor is not None:
-        response.headers["X-Next-Cursor"] = str(next_cursor)
-
-    return sessions
+) -> SessionListResponse:
+    return await service.list_sessions_admin(current_admin, limit, cursor)
 
 
 @router.get(
@@ -129,6 +123,7 @@ async def rotate_session_stream_key(
 
 @router.post(
     "/sessions/{session_id}/stop",
+    status_code=status.HTTP_204_NO_CONTENT,
     summary="라이브 방송 강제 종료",
     description="현재 진행 중인 AWS IVS 스트림 송출을 강제 중단시키고, 세션 상태를 'ENDED'로 변경",
 )
@@ -136,9 +131,22 @@ async def stop_live_stream(
     session_id: int = Path(..., description="중단할 세션 ID"),
     current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
-) -> dict[str, str]:
+) -> None:
     await service.stop_stream_session(session_id, current_admin)
-    return {"message": "방송이 종료 처리되었습니다."}
+
+
+@router.patch(
+    "/sessions/{session_id}/reopen",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="종료된 세션을 재활성화",
+    description="ENDED 상태의 세션을 READY 상태로 전환하여 재방송 준비 상태로 만듦",
+)
+async def reopen_live_stream(
+    session_id: int = Path(..., description="재활성화할 세션 ID"),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> None:
+    await service.reopen_session(session_id, current_admin)
 
 
 # ================================= ivs 송출 테스트용 엔드포인트 =================================

@@ -57,6 +57,7 @@ class AdminUserAdmin(TortoiseModelAdmin):
     list_filter = ("is_superuser", "is_active")
     search_fields = ("username",)
     search_help_text = "아이디 검색"
+    ordering = ("-created_at",)
 
     @staticmethod
     def _hash_to_bytes(stored_hash: str | bytes | None) -> bytes | None:
@@ -109,6 +110,7 @@ class UserAdmin(TortoiseModelAdmin):
     list_filter = ("provider", "is_superuser")
     search_fields = ("nickname", "email", "provider_id")
     search_help_text = "닉네임/이메일/소셜 ID 검색"
+    ordering = ("-created_at",)
 
 
 @register(UserCatFav)
@@ -120,16 +122,18 @@ class UserCatFavAdmin(TortoiseModelAdmin):
     list_filter = ("category",)
     search_fields = ("user__nickname", "user__email")
     search_help_text = "닉네임/이메일 검색"
+    ordering = ("-created_at",)
 
 
 @register(UserDeleteLog)
 class UserDeleteLogAdmin(TortoiseModelAdmin):
     verbose_name = "회원 탈퇴 로그"
     verbose_name_plural = _ko_plural(verbose_name)
-    list_display = ("id", "user", "email", "deleted_at", "deleted_by")
+    list_display = ("id", "user", "email", "deleted_at", "deleted_by", "created_at")
     list_display_links = ("id", "email")
     search_fields = ("email", "deleted_by")
     search_help_text = "이메일/삭제자 검색"
+    ordering = ("-created_at",)
 
 
 @register(Artist)
@@ -148,6 +152,7 @@ class ArtistAdmin(TortoiseModelAdmin):
     list_filter = ("category_type", "group_type")
     search_fields = ("stage_name", "agency")
     search_help_text = "활동명/소속사 검색"
+    ordering = ("-created_at",)
 
 
 @register(Follow)
@@ -156,6 +161,7 @@ class FollowAdmin(TortoiseModelAdmin):
     verbose_name_plural = _ko_plural(verbose_name)
     list_display = ("id", "user", "artist", "created_at")
     list_display_links = ("id", "user")
+    ordering = ("-created_at",)
 
 
 @register(Concert)
@@ -167,6 +173,7 @@ class ConcertAdmin(TortoiseModelAdmin):
     list_filter = ("category",)
     search_fields = ("title",)
     search_help_text = "공연 제목 검색"
+    ordering = ("-created_at",)
 
 
 @register(ConcertSession)
@@ -242,6 +249,7 @@ class ConcertArtistAdmin(TortoiseModelAdmin):
     list_display = ("id", "session", "artist", "is_main", "created_at")
     list_display_links = ("id", "session")
     list_filter = ("is_main",)
+    ordering = ("-created_at",)
 
 
 @register(StreamChannel)
@@ -260,6 +268,7 @@ class StreamChannelAdmin(TortoiseModelAdmin):
     )
     list_display_links = ("id", "session")
     list_filter = ("type", "latency_mode", "is_private", "is_record")
+    ordering = ("-created_at",)
 
     async def delete_model(self, id: int) -> None:
         channel = await StreamChannel.get_or_none(id=id)
@@ -300,6 +309,7 @@ class StreamVodAdmin(TortoiseModelAdmin):
     list_filter = ("processing_status",)
     search_fields = ("s3_bucket", "s3_key_prefix")
     search_help_text = "S3 버킷/경로 검색"
+    ordering = ("-created_at",)
 
 
 # @register(UserNoti)
@@ -323,6 +333,8 @@ class ConcertNotiAdmin(TortoiseModelAdmin):
         "status",
         "send_at",
         "sent_at",
+        "created_at",
     )
     list_display_links = ("id", "user")
     list_filter = ("kind", "status")
+    ordering = ("-created_at",)

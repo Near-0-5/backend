@@ -218,7 +218,7 @@ class StreamAdminService:
 
     # ==============================================================================================
     async def create_session_with_infrastructure(
-        self, concert_id: int, data: SessionCreateRequest, user: User
+        self, concert_id: int, data: SessionCreateRequest, user: User | None = None
     ) -> SessionResponse:
         """
         [Admin] 콘서트 세션 생성 및 AWS IVS 채널 자동 발급

@@ -21,6 +21,7 @@ class ProviderChoice(str, Enum):
 class GenderChoices(str, Enum):
     M = "M"  # MALE
     F = "F"  # FEMALE
+    U = "U"  # 네이버는 U를 제공함.
 
 
 class User(models.Model):

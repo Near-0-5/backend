@@ -117,7 +117,7 @@ async def test_withdraw_kakao_user_full_flow(initialize_tests):
     )
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value = MagicMock(status_code=200)
-        await user_service.withdraw_kakao_user(user, reason="테스트 탈퇴")
+        await user_service.withdraw_user(user, reason="테스트 탈퇴")
 
     assert await User.get_or_none(id=user.id) is None
     assert await UserDeleteLog.filter(email="test@example.com").exists() is True

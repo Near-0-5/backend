@@ -82,12 +82,12 @@ class Settings(BaseSettings):
     COGNITO_CLIENT_SECRET: str
     COGNITO_DOMAIN: str
     COGNITO_USER_POOL_ID: str
+    COGNITO_REDIRECT_URI: str
 
-    # social_login (KAKAO_REDIRECT_URI 제외 삭제 필요)
-    KAKAO_REST_API_KEY: str
-    KAKAO_REDIRECT_URI: str
-    KAKAO_CLIENT_SECRET: str
-    KAKAO_ADMIN_KEY: str
+    # social_login
+    NAVER_REDIRECT_URI: str
+    NAVER_CLIENT_ID: str
+    NAVER_CLIENT_SECRET: str
 
     CALLBACK_REDIRECT_URL: str
 

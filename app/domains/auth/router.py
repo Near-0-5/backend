@@ -1,10 +1,10 @@
-from http.client import HTTPException
+import secrets
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 
-from app.api.deps import get_current_user_from_refresh_cookie  # 유저 인증 의존성
+from app.api.deps import get_current_user_from_refresh_cookie, logger  # 유저 인증 의존성
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.domains.auth.schemas import TokenResponse
@@ -48,17 +48,47 @@ async def admin_login(
 
 
 @router.get("/login", summary="소셜 로그인 시작 (Cognito 호스팅 UI)")
-async def social_login(provider: ProviderChoice = ProviderChoice.KAKAO) -> RedirectResponse:
+async def social_login(
+    response: Response, provider: ProviderChoice = ProviderChoice.KAKAO
+) -> RedirectResponse:
     """
     카카오, 구글은 Cognito로, 네이버는 네이버 직접 로그인으로 리다이렉트합니다.
     """
+    # 입력된 값을 첫글자 대문자로 변환 (naver -> Naver, NAVER -> Naver)
+    formatted_provider = provider.capitalize()
+
+    # 네이버
+    if formatted_provider == ProviderChoice.NAVER:
+        # 네이버는 Cognito를 거치지 않고 직접 네이버 API로 보냅니다.
+        state = secrets.token_urlsafe(32)
+        naver_login_url = (
+            "https://nid.naver.com/oauth2.0/authorize"
+            f"?response_type=code"
+            f"&client_id={settings.NAVER_CLIENT_ID}"
+            f"&redirect_uri={settings.NAVER_REDIRECT_URI}"  # 네이버 전용 콜백 필요
+            f"&state={state}"
+        )
+        redirect_response = RedirectResponse(naver_login_url)
+
+        # 검증을 위해 state 값을 브라우저 쿠키에 임시 저장 (3분만 유지)
+        redirect_response.set_cookie(
+            key="naver_state",
+            value=state,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=180,  # 3분 내에 로그인을 완료해야 함
+            path="/",
+        )
+        return redirect_response
+
     # 구글, 카카오
     cognito_login_url = (
         f"{settings.COGNITO_DOMAIN}/oauth2/authorize"
         f"?client_id={settings.COGNITO_CLIENT_ID}"
         f"&response_type=code"
         f"&scope=openid+email+profile"
-        f"&redirect_uri={settings.KAKAO_REDIRECT_URI}"
+        f"&redirect_uri={settings.COGNITO_REDIRECT_URI}"
         f"&identity_provider={provider.value}"
     )
     return RedirectResponse(cognito_login_url)
@@ -89,6 +119,50 @@ async def social_callback(response: Response, code: str = Query(...)) -> Redirec
         samesite="none",  # 프론트와의 도메인이 다르기에 none
         path="/",  # 삭제할거면 전체에서 삭제
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
+    )
+
+    return redirect_response
+
+
+@router.get("/naver/callback", include_in_schema=False, summary="네이버 로그인 공용 콜백")
+async def naver_callback(
+    response: Response,
+    code: str = Query(..., description="네이버 인가 코드"),
+    state: str = Query(None, description="CSRF 방지용 상태 값"),
+    naver_state: str = Cookie(None, description="우리가 쿠키에 저장한 상태 값"),
+) -> RedirectResponse:
+    """
+    네이버 직접 로그인 콜백 핸들러
+    토큰 교환 -> 프로필 조회 -> DB 저장 -> JWT 발급
+    """
+    # state 검증 수행
+    if not state or not naver_state or state != naver_state:
+        logger.warning(f"State 불일치: naver_state={naver_state}, state={state}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="비정상적인 접근입니다. (State mismatch)",
+        )
+    token_data = await auth_service.process_naver_login(code=code, state=state)
+
+    # 프론트엔드로 리다이렉트 (기존 카카오/구글 콜백과 동일)
+    redirect_url = (
+        f"{settings.CALLBACK_REDIRECT_URL}?access_token={token_data.access_token}"
+        f"&is_new_user={str(token_data.is_new_user).lower()}"
+    )
+    redirect_response = RedirectResponse(url=redirect_url)
+
+    # 검증 완료된 임시 쿠키 삭제
+    redirect_response.delete_cookie("naver_state")
+
+    # refresh Token을 HttpOnly 쿠키에 설정
+    redirect_response.set_cookie(
+        key="refresh_token",
+        value=token_data.refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
     )
 
     return redirect_response

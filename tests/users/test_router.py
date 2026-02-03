@@ -56,7 +56,7 @@ async def test_user_router_coverage_full():
 
             # DELETE /me
             with patch(
-                "app.domains.users.router.user_service.withdraw_kakao_user", new_callable=AsyncMock
+                "app.domains.users.router.user_service.withdraw_user", new_callable=AsyncMock
             ) as mock_withdraw:
                 response_del = await ac.delete("/api/v1/users/me")
 

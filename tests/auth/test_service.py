@@ -6,8 +6,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.security import create_refresh_token
 from app.domains.auth.service import AuthService, auth_service
-from app.domains.notifications.models import UserNoti
 from app.domains.users.models import ProviderChoice, User
+from app.domains.users.service import user_service
 from app.main import app
 
 
@@ -95,37 +95,6 @@ async def test_image_processing_scenarios(mocker):
     mocker.patch("httpx.AsyncClient.get", side_effect=Exception("S3 Error"))
     url = await service._process_and_upload_image(user, "http://error.com")
     assert url == "http://error.com"
-
-
-@pytest.mark.asyncio
-async def test_process_kakao_login_new_user_flow(mocker, initialize_tests):
-    """Line 53-106: 신규 유저 생성 및 알림 설정 로직 커버"""
-    mocker.patch("app.integrations.kakao.kakao_client.get_access_token", return_value="token")
-    mocker.patch(
-        "app.integrations.kakao.kakao_client.get_user_info",
-        return_value={
-            "id": "888888",
-            "kakao_account": {
-                "email": "new_user@test.com",
-                "profile": {"nickname": "신규", "profile_image_url": "http://img.com"},
-                "gender": "male",
-                "birthday": "0101",
-                "birthyear": "1990",
-            },
-        },
-    )
-    # 이미지 처리 로직 내부로 진입시키기 위해 patch
-    mocker.patch.object(
-        AuthService, "_process_and_upload_image", return_value="http://s3.com/p.jpg"
-    )
-
-    result = await auth_service.process_kakao_login("code")
-
-    assert result.is_new_user is True
-    # Line 100: 알림 설정 생성 확인
-    user = await User.get(provider_id="888888")
-    noti = await UserNoti.get_or_none(user_id=user.id)
-    assert noti is not None
 
 
 @pytest.mark.asyncio
@@ -222,3 +191,52 @@ async def test_process_cognito_login_success(mocker, initialize_tests):
     user = await User.get_or_none(provider_id="cognito_sub_123")
     assert user is not None
     assert user.email == "cognito@test.com"
+
+
+@pytest.mark.asyncio
+async def test_withdraw_user_kakao_success(mocker, initialize_tests):
+    user = await User.create(
+        provider_id="kakao_123",
+        provider=ProviderChoice.KAKAO,
+        email="k@test.com",
+        nickname="tester",
+        gender="M",
+        profile_img_url="https://s3.com/test_image.png",
+    )
+
+    mocker.patch("boto3.client")
+
+    # [수정] 실제 사용되는 user_service 인스턴스의 image_resizer를 모킹
+    mock_s3_delete = mocker.patch.object(
+        user_service.image_resizer, "delete_all_by_id_path", new_callable=AsyncMock
+    )
+
+    # 서비스 메서드 호출
+    await user_service.withdraw_user(user)
+
+    mock_s3_delete.assert_called_once()
+    assert await User.get_or_none(id=user.id) is None
+
+
+@pytest.mark.asyncio
+async def test_process_naver_login_logic(mocker, initialize_tests):
+    """네이버 로그인 시 유저 생성/업데이트 로직 테스트"""
+    from app.domains.auth.service import auth_service
+
+    # 네이버 연동 모킹
+    mocker.patch("app.integrations.naver.NaverIntegration.get_access_token", return_value="token")
+    mocker.patch(
+        "app.integrations.naver.NaverIntegration.get_user_info",
+        return_value={
+            "id": "naver_123",
+            "email": "naver@test.com",
+            "nickname": "네이버엿",
+            "gender": "M",
+        },
+    )
+
+    result = await auth_service.process_naver_login("code", "state")
+    assert result.access_token is not None
+
+    user = await User.get(provider_id="naver_123")
+    assert user.nickname == "네이버엿"

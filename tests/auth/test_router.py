@@ -9,6 +9,12 @@ from app.domains.users.models import ProviderChoice, User
 from app.main import app
 
 
+@pytest.fixture
+async def ac():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client
+
+
 @pytest.mark.asyncio
 async def test_kakao_callback_endpoint(mocker):
     """카카오 콜백 시 프론트엔드로 리다이렉트되는지 확인"""
@@ -149,3 +155,51 @@ async def test_refresh_token_dependency_coverage(mocker, initialize_tests):
     assert "access_token" in response.json()
 
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_naver_login_start(ac: AsyncClient):
+    """네이버 로그인 시작 시 state 쿠키 생성 확인"""
+    # URL 경로를 앱의 prefix(/api/v1)에 맞춰 정확히 기입
+    response = await ac.get("/api/v1/auth/login?provider=Naver", follow_redirects=False)
+    assert response.status_code in [302, 307]
+    assert "naver_state" in response.cookies
+    assert "nid.naver.com" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_naver_callback_success(mocker, ac: AsyncClient):
+    """네이버 콜백 성공 및 state 검증 테스트"""
+    # 1. state 생성 및 쿠키 설정 시뮬레이션
+    state = "test_state_123"
+    ac.cookies.set("naver_state", state)
+
+    # 2. 서비스 로직 모킹
+    mock_token = AsyncMock()
+    mock_token.access_token = "at"
+    mock_token.refresh_token = "rt"
+    mock_token.is_new_user = False
+    mocker.patch(
+        "app.domains.auth.router.auth_service.process_naver_login", return_value=mock_token
+    )
+
+    # 3. 콜백 호출
+    response = await ac.get(f"/api/v1/auth/naver/callback?code=code&state={state}")
+
+    assert response.status_code in [302, 307]
+    assert "refresh_token" in response.cookies
+    assert response.cookies.get("naver_state") is None  # 검증 후 삭제 확인
+
+
+@pytest.mark.asyncio
+async def test_naver_callback_state_mismatch(ac: AsyncClient):
+    """Missing lines 136-165 (state 불일치) 커버"""
+    # 1. 클라이언트 쿠키에 잘못된 state 설정
+    ac.cookies.set("naver_state", "original_state")
+
+    # 2. 쿼리 파라미터로 다른 state 전송
+    response = await ac.get("/api/v1/auth/naver/callback?code=code&state=wrong_state")
+
+    # 3. router.py의 400 raise HTTPException 구문이 실행됨
+    assert response.status_code == 400
+    assert "비정상적인 접근" in response.text

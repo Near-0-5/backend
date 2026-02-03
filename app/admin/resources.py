@@ -195,7 +195,7 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
 
     async def save_model(self, id: int | None, payload: dict[str, Any]) -> dict[str, Any] | None:
         if id is not None:
-            return cast("dict[str, Any] | None", await super().save_model(id, payload))
+            return await super().save_model(id, payload)
 
         fields = self.get_model_fields_with_widget_types(with_m2m=False, with_upload=False)
         parsed_payload = {
@@ -232,7 +232,7 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         obj = await self.orm_get_obj(session_res.id)
         if not obj:
             return None
-        return cast("dict[str, Any]", await self.serialize_obj(obj))
+        return await self.serialize_obj(obj)
 
 
 @register(ConcertArtist)

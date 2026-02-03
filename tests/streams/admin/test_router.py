@@ -240,15 +240,3 @@ class TestStreamRouter:
 
             finally:
                 app.dependency_overrides.clear()
-
-        @pytest.mark.asyncio
-        async def test_stream_monitor_page(self, client, mock_admin_user):
-            """모니터링 페이지 HTML 응답 검증"""
-            app.dependency_overrides[get_admin_user] = lambda: mock_admin_user
-
-            try:
-                res = await client.get("/api/v1/admin/streams/sessions/1/monitor")
-                assert res.status_code == 200
-                assert "text/html" in res.headers["content-type"]
-            finally:
-                app.dependency_overrides.clear()

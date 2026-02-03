@@ -4,10 +4,8 @@ from fastapi import (
     Depends,
     Path,
     Query,
-    Request,
     status,
 )
-from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.api.deps import get_admin_user
@@ -23,7 +21,7 @@ from app.domains.streams.admin.service import StreamAdminService
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/streams", tags=["스트리밍 관리"])
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/admin/templates")
 
 
 @router.post(
@@ -163,22 +161,3 @@ async def get_session_ingest_data(
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> StreamIngestResponse:
     return await service.get_stream_ingest_info(session_id, user=current_admin)
-
-
-@router.get(
-    "/sessions/{session_id}/monitor",
-    response_class=HTMLResponse,
-    summary="실시간 송출 모니터링 페이지",
-    description="관리자가 방송 송출 상태를 확인하고 \
-    실시간으로 영상을 프리뷰 할 수 있는 HTML 대시보드",
-)
-async def stream_monitor_page(
-    request: Request,
-    session_id: int = Path(..., description="모니터링할 콘서트 세션 ID"),
-    current_admin: User = Depends(get_admin_user),
-) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request,
-        "stream_monitor.html",
-        {"session_id": session_id, "is_admin": current_admin.is_superuser},
-    )

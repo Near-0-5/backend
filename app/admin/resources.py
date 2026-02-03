@@ -1,8 +1,9 @@
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 import bcrypt
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
-from fastadmin import register
+from fastadmin import display, register
 from fastapi import HTTPException
 
 from app.admin.models import AdminUser
@@ -41,6 +42,10 @@ if TYPE_CHECKING:
         async def serialize_obj(self, obj: Any, list_view: bool = False) -> dict[str, Any]: ...
 else:
     TortoiseModelAdmin = _RuntimeTortoiseModelAdmin
+
+
+def typed_display[T: Callable[..., Any]](func: T) -> T:
+    return cast("T", display(func))
 
 
 def _ko_plural(name: str) -> str:
@@ -185,6 +190,7 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         "concert",
         "session_name",
         "status",
+        "monitor_link",
         "access_level",
         "start_at",
         "end_at",
@@ -240,6 +246,15 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         if not obj:
             return None
         return await self.serialize_obj(obj)
+
+    @typed_display
+    def monitor_link(self, obj: ConcertSession) -> str:
+        from fastadmin.settings import settings as admin_settings
+
+        url = f"/{admin_settings.ADMIN_PREFIX}/sessions/{obj.id}/monitor"
+        return url
+
+    monitor_link.short_description = "모니터링"  # type: ignore[attr-defined]
 
 
 @register(ConcertArtist)

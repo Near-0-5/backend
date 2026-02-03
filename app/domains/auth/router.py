@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.domains.auth.schemas import TokenResponse
 from app.domains.auth.service import auth_service
-from app.domains.users.models import User
+from app.domains.users.models import ProviderChoice, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -47,28 +47,30 @@ async def admin_login(
 # ============================================================
 
 
-@router.get("/kakao/login", summary="카카오 서비스 로그인")
-async def kakao_login() -> RedirectResponse:
+@router.get("/login", summary="소셜 로그인 시작 (Cognito 호스팅 UI)")
+async def social_login(provider: ProviderChoice = ProviderChoice.KAKAO) -> RedirectResponse:
     """
-    카카오 로그인 페이지로 리다이렉트됩니다.
+    카카오, 구글은 Cognito로, 네이버는 네이버 직접 로그인으로 리다이렉트합니다.
     """
-    kakao_auth_url = (
-        f"https://kauth.kakao.com/oauth/authorize"
-        f"?client_id={settings.KAKAO_REST_API_KEY}"
-        f"&redirect_uri={settings.KAKAO_REDIRECT_URI}"
+    # 구글, 카카오
+    cognito_login_url = (
+        f"{settings.COGNITO_DOMAIN}/oauth2/authorize"
+        f"?client_id={settings.COGNITO_CLIENT_ID}"
         f"&response_type=code"
+        f"&scope=openid+email+profile"
+        f"&redirect_uri={settings.KAKAO_REDIRECT_URI}"
+        f"&identity_provider={provider.value}"
     )
-    return RedirectResponse(kakao_auth_url)
+    return RedirectResponse(cognito_login_url)
 
 
-@router.get("/kakao/callback", include_in_schema=False)
-async def kakao_callback(response: Response, code: str = Query(...)) -> RedirectResponse:
+@router.get("/callback", include_in_schema=False, summary="소셜 로그인 공용 콜백")
+async def social_callback(response: Response, code: str = Query(...)) -> RedirectResponse:
     """
-    카카오 인증 서버로부터 리다이렉트되어 인가 코드를 받습니다.
-    settings.CALLBACK_REDIRECT_URL 리다이렉트합니다.
+    Cognito로부터 인가 코드를 받아 process_cognito_login을 실행합니다.
     사용자가 직접 호출할 필요가 없으므로 API 문서에서 제외합니다.
     """
-    token_data = await auth_service.process_kakao_login(code)
+    token_data = await auth_service.process_cognito_login(code)
 
     # 화면으로 보낼 redirect url 구성 및 응답할 RedirectResponse 설정
     redirect_url = (
@@ -84,7 +86,7 @@ async def kakao_callback(response: Response, code: str = Query(...)) -> Redirect
         value=token_data.refresh_token,
         httponly=True,
         secure=True,  # HTTPS에서만 작동 True
-        samesite="none",
+        samesite="none",  # 프론트와의 도메인이 다르기에 none
         path="/",  # 삭제할거면 전체에서 삭제
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
     )
@@ -115,7 +117,7 @@ async def refresh_token(
         value=token_data.refresh_token,
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="none",  # 프론트와의 도메인이 다르기에 none
         path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
     )

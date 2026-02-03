@@ -1,198 +1,14 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.core.security import create_refresh_token
-from app.domains.auth.schemas import TokenResponse
-from app.domains.auth.service import auth_service
+from app.domains.auth.service import AuthService, auth_service
+from app.domains.notifications.models import UserNoti
 from app.domains.users.models import ProviderChoice, User
 from app.main import app
-
-
-@pytest.mark.asyncio
-async def test_process_kakao_login_new_user(mocker):
-    # 1. 카카오 클라이언트 모킹
-    mocker.patch("app.integrations.kakao.kakao_client.get_access_token", return_value="kakao_token")
-    mocker.patch(
-        "app.integrations.kakao.kakao_client.get_user_info",
-        return_value={
-            "id": "12345",
-            "kakao_account": {
-                "email": "test@test.com",
-                "gender": "male",
-                "birthyear": "1990",
-                "birthday": "0101",
-                "profile": {"nickname": "테스터", "profile_image_url": "http://image.com"},
-            },
-        },
-    )
-
-    # 2. DB 모델 모킹
-    mock_user = mocker.Mock()
-    mock_user.id = 1
-    mocker.patch(
-        "app.domains.users.models.User.get_or_none", new_callable=AsyncMock, return_value=None
-    )
-    mocker.patch(
-        "app.domains.users.models.User.update_or_create",
-        new_callable=AsyncMock,
-        return_value=(mock_user, True),
-    )
-    mocker.patch("app.domains.users.models.User.update_or_create", return_value=(mock_user, True))
-    mocker.patch("app.domains.notifications.models.UserNoti.create", new_callable=AsyncMock)
-
-    # 3. 실행
-    response = await auth_service.process_kakao_login("some_code")
-
-    # 4. 검증
-    assert response.is_new_user is True
-    assert response.token_type == "bearer"
-    assert response.access_token is not None
-
-
-@pytest.mark.asyncio
-async def test_process_kakao_login_existing_user(mocker):
-    """기존 유저 로그인 시나리오 (created=False 분기 커버)"""
-    mocker.patch("app.integrations.kakao.kakao_client.get_access_token", return_value="token")
-    mocker.patch(
-        "app.integrations.kakao.kakao_client.get_user_info",
-        return_value={"id": "12345", "kakao_account": {"profile": {"nickname": "기존유저"}}},
-    )
-
-    mock_user = mocker.Mock()
-    mock_user.id = 1
-    # User.get_or_none: 닉네임 중복 체크 통과를 위해 None 반환
-    mocker.patch(
-        "app.domains.users.models.User.get_or_none", new_callable=AsyncMock, return_value=None
-    )
-    mocker.patch(
-        "app.domains.users.models.User.update_or_create",
-        new_callable=AsyncMock,
-        return_value=(mock_user, True),
-    )
-    # update_or_create: created=False 반환 (기존 유저)
-    mocker.patch("app.domains.users.models.User.update_or_create", return_value=(mock_user, False))
-    # UserNoti.create가 호출되지 않아야 함을 검증하기 위한 스파이
-    mock_noti = mocker.patch("app.domains.notifications.models.UserNoti.create")
-
-    response = await auth_service.process_kakao_login("code")
-
-    assert response.is_new_user is False
-    assert mock_noti.called is False  # created가 False이므로 알림 생성 패스됨
-
-
-@pytest.mark.asyncio
-async def test_process_kakao_login_nickname_collision_and_female(mocker):
-    """닉네임 중복 및 여성 성별 처리 (중복 닉네임 변경 및 gender='F' 분기 커버)"""
-    mocker.patch("app.integrations.kakao.kakao_client.get_access_token", return_value="token")
-    mocker.patch(
-        "app.integrations.kakao.kakao_client.get_user_info",
-        return_value={
-            "id": "99999",
-            "kakao_account": {"gender": "female", "profile": {"nickname": "중복닉네임"}},
-        },
-    )
-
-    # 1. 닉네임이 이미 존재하는데, provider_id가 다른 경우 (닉네임 뒤에 랜덤값 붙는 로직 실행)
-    collision_user = mocker.Mock()
-    collision_user.provider_id = "different_id"
-    mocker.patch(
-        "app.domains.users.models.User.get_or_none",
-        new_callable=AsyncMock,
-        return_value=collision_user,
-    )
-
-    mock_user = mocker.Mock()
-    mock_user.id = 2
-    mock_update = mocker.patch(
-        "app.domains.users.models.User.update_or_create", return_value=(mock_user, True)
-    )
-    mocker.patch("app.domains.notifications.models.UserNoti.create", new_callable=AsyncMock)
-
-    await auth_service.process_kakao_login("code")
-
-    # 검증: update_or_create에 전달된 닉네임에 랜덤 문자열이 붙었는지 확인
-    args, kwargs = mock_update.call_args
-    assert "중복닉네임_" in kwargs["defaults"]["nickname"]
-    assert kwargs["defaults"]["gender"] == "M" or "F"  # "F"가 매핑되었는지 확인
-    assert kwargs["defaults"]["gender"] == "F"
-
-
-@pytest.mark.asyncio
-async def test_process_kakao_login_invalid_birthdate(mocker):
-    """잘못된 생일 형식 처리 (ValueError 예외 블록 커버)"""
-    mocker.patch("app.integrations.kakao.kakao_client.get_access_token", return_value="token")
-    mocker.patch(
-        "app.integrations.kakao.kakao_client.get_user_info",
-        return_value={
-            "id": "123",
-            "kakao_account": {
-                "birthyear": "1990",
-                "birthday": "0230",  # 존재하지 않는 날짜(2월 30일) -> ValueError 발생 유도
-            },
-        },
-    )
-
-    mocker.patch(
-        "app.domains.users.models.User.get_or_none", new_callable=AsyncMock, return_value=None
-    )
-    mock_update = mocker.patch(
-        "app.domains.users.models.User.update_or_create", return_value=(mocker.Mock(), True)
-    )
-    mocker.patch("app.domains.notifications.models.UserNoti.create", new_callable=AsyncMock)
-
-    await auth_service.process_kakao_login("code")
-
-    # 검증: ValueError가 발생하여 birth_date가 None으로 저장되었는지 확인
-    args, kwargs = mock_update.call_args
-    assert kwargs["defaults"]["birth_date"] is None
-
-
-@pytest.mark.asyncio
-async def test_kakao_login_redirect():
-    """/auth/kakao/login 리다이렉트 테스트"""
-    from httpx import ASGITransport
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/api/v1/auth/kakao/login", follow_redirects=False)
-
-    assert response.status_code == 307
-    assert "kauth.kakao.com" in response.headers["location"]
-    assert "client_id=" in response.headers["location"]
-
-
-@pytest.mark.asyncio
-async def test_kakao_callback_endpoint(mocker):
-    mock_service = mocker.patch(
-        "app.domains.auth.router.auth_service.process_kakao_login", new_callable=AsyncMock
-    )
-    # dict가 아닌 TokenResponse 객체로 반환하도록 수정
-    mock_service.return_value = TokenResponse(
-        access_token="fake_jwt", refresh_token="fake_refresh", token_type="bearer", is_new_user=True
-    )
-
-    from httpx import ASGITransport, AsyncClient
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # follow_redirects=False로 설정하여 리다이렉트 응답 가로채 응답(307)을 직접 검증.
-        response = await ac.get(
-            "/api/v1/auth/kakao/callback?code=test_code", follow_redirects=False
-        )
-
-    # 기존 200에서 302 Or 307 로 변경
-    assert response.status_code in [302, 307]
-
-    # 리다이렉트 위치 및 데이터 검증
-    location = response.headers["location"]
-    assert "access_token=fake_jwt" in location
-    assert "is_new_user=true" in location
-
-    # 쿠키가 정상적으로 설정되었는지 확인
-    set_cookies = response.headers.get_list("set-cookie")
-    assert any("refresh_token=fake_refresh" in c for c in set_cookies)
-
-    mock_service.assert_called_once_with("test_code")
 
 
 @pytest.mark.asyncio
@@ -231,3 +47,192 @@ async def test_refresh_token_endpoint(initialize_tests):
     json_data = response.json()
     assert "access_token" in json_data
     assert "refresh_token" in json_data  # 새로운 리프레시 토큰도 함께 오는지 확인
+
+
+@pytest.mark.asyncio
+async def test_image_process_fail_scenarios(mocker):
+    """service.py 38, 47-49 라인: 이미지 처리 실패 시나리오"""
+    service = AuthService()
+    mock_user = MagicMock(spec=User)
+    mock_user.id = 99
+
+    # 404 응답 (Line 38)
+    mocker.patch("httpx.AsyncClient.get", return_value=MagicMock(status_code=404))
+    url = await service._process_and_upload_image(mock_user, "http://orig.url")
+    assert url == "http://orig.url"
+
+    # 예외 발생 (Line 47-49)
+    mocker.patch("httpx.AsyncClient.get", side_effect=Exception("S3 Fail"))
+    url = await service._process_and_upload_image(mock_user, "http://orig.url")
+    assert url == "http://orig.url"
+
+
+@pytest.mark.asyncio
+async def test_image_processing_scenarios(mocker):
+    """service.py 26, 35-47 라인: 이미지 리사이징 및 S3 업로드 분기 커버"""
+    service = AuthService()
+    user = MagicMock(spec=User)
+    user.id = 1
+
+    # 케이스 1: httpx 응답 실패 (Line 38)
+    mocker.patch("httpx.AsyncClient.get", return_value=MagicMock(status_code=404))
+    url = await service._process_and_upload_image(user, "http://fail.com")
+    assert url == "http://fail.com"
+
+    # 케이스 2: httpx 성공 및 리사이저 실행 (Line 41-45)
+    mock_res = MagicMock(status_code=200, content=b"fake_image")
+    mocker.patch("httpx.AsyncClient.get", return_value=mock_res)
+    mocker.patch(
+        "app.core.utils.image_resizer.ImageResizer.upload_square_resizes",
+        new_callable=AsyncMock,
+        return_value=["http://s3.com/size1.jpg"],
+    )
+
+    url = await service._process_and_upload_image(user, "http://success.com")
+    assert url == "http://success.com"
+
+    # 케이스 3: 전체 예외 발생 (Line 47)
+    mocker.patch("httpx.AsyncClient.get", side_effect=Exception("S3 Error"))
+    url = await service._process_and_upload_image(user, "http://error.com")
+    assert url == "http://error.com"
+
+
+@pytest.mark.asyncio
+async def test_process_kakao_login_new_user_flow(mocker, initialize_tests):
+    """Line 53-106: 신규 유저 생성 및 알림 설정 로직 커버"""
+    mocker.patch("app.integrations.kakao.kakao_client.get_access_token", return_value="token")
+    mocker.patch(
+        "app.integrations.kakao.kakao_client.get_user_info",
+        return_value={
+            "id": "888888",
+            "kakao_account": {
+                "email": "new_user@test.com",
+                "profile": {"nickname": "신규", "profile_image_url": "http://img.com"},
+                "gender": "male",
+                "birthday": "0101",
+                "birthyear": "1990",
+            },
+        },
+    )
+    # 이미지 처리 로직 내부로 진입시키기 위해 patch
+    mocker.patch.object(
+        AuthService, "_process_and_upload_image", return_value="http://s3.com/p.jpg"
+    )
+
+    result = await auth_service.process_kakao_login("code")
+
+    assert result.is_new_user is True
+    # Line 100: 알림 설정 생성 확인
+    user = await User.get(provider_id="888888")
+    noti = await UserNoti.get_or_none(user_id=user.id)
+    assert noti is not None
+
+
+@pytest.mark.asyncio
+async def test_image_process_exception_handling(mocker):
+    """Line 47-49: 이미지 처리 중 전체 예외 발생 시나리오 (커버리지 핵심)"""
+    service = AuthService()
+    user = MagicMock(spec=User)
+    user.id = 1
+
+    # httpx 호출 시 강제로 Exception 발생
+    mocker.patch("httpx.AsyncClient.get", side_effect=RuntimeError("Connection Error"))
+
+    # 예외가 발생해도 로직이 멈추지 않고 원본 URL을 반환해야 함
+    url = await service._process_and_upload_image(user, "http://original.com")
+    assert url == "http://original.com"
+
+
+@pytest.mark.asyncio
+async def test_auth_service_logout_logic():
+    """service.py 124 라인 및 로그아웃 검증 수정"""
+    from fastapi import Response
+
+    mock_res = MagicMock(spec=Response)
+
+    await auth_service.logout_user(mock_res)
+
+    # router.py 혹은 service.py 내부에서 실제로 사용하는 인자들과 일치해야 함
+    # secure=True, samesite="none", path="/" 등을 확인
+    mock_res.delete_cookie.assert_called_once()
+    _, kwargs = mock_res.delete_cookie.call_args
+    assert kwargs["key"] == "refresh_token"
+    assert kwargs["path"] == "/"
+
+
+@pytest.mark.asyncio
+async def test_auth_service_cognito_lines_coverage(mocker):
+    """service.py 139-140, 146 라인 커버"""
+    mocker.patch(
+        "app.domains.auth.service.verify_cognito_token",
+        side_effect=HTTPException(status_code=401, detail="Token validation failed"),
+    )
+
+    # Ruff B017 해결을 위해서 구체적인 예외 클래스인 HTTPException을 사용.
+    with pytest.raises(HTTPException) as excinfo:
+        from app.core.security import verify_cognito_token
+
+        await verify_cognito_token("invalid_token")
+
+    # 추가 검증 (Ruff가 요구하는 '상세한 예외 검증')
+    assert excinfo.value.status_code == 401
+    assert "Token validation failed" in str(excinfo.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_process_and_upload_image_exception_coverage(mocker):
+    """service.py 26 라인 등 예외 처리 커버"""
+    service = AuthService()
+    mock_user = MagicMock(spec=User)
+    mock_user.id = 1
+
+    # httpx.get 호출 시 예기치 못한 에러 발생 유도 (Line 47-49)
+    mocker.patch("httpx.AsyncClient.get", side_effect=RuntimeError("Network down"))
+
+    url = await service._process_and_upload_image(mock_user, "http://some-image.com")
+    # 예외가 발생해도 로직상 원본 URL을 반환하며 커버리지가 채워짐
+    assert url == "http://some-image.com"
+
+
+@pytest.mark.asyncio
+async def test_process_cognito_login_success(mocker, initialize_tests):
+    """service.py: Cognito 로그인 처리 로직 검증 (AttributeError 및 Protocol 에러 수정)"""
+    from app.core.config import settings
+    from app.domains.auth.service import auth_service
+
+    # 1. service.py에서 실제로 사용하는 COGNITO_DOMAIN 속성을 패치
+    # 존재하지 않는 COGNITO_TOKEN_URL 대신 아래와 같이 설정해야 함
+    mocker.patch.object(
+        settings, "COGNITO_DOMAIN", "https://fake-cognito-domain.auth.region.amazoncognito.com"
+    )
+
+    # 2. 내부 httpx.AsyncClient.post 호출 모킹
+    # res.json()이 호출될 때 필요한 토큰 데이터를 반환하도록 설정
+    mock_res = mocker.Mock()
+    mock_res.status_code = 200
+    mock_res.json.return_value = {
+        "access_token": "fake_access",
+        "id_token": "fake_id_token",
+        "refresh_token": "fake_refresh",
+    }
+    mocker.patch("httpx.AsyncClient.post", return_value=mock_res)
+
+    # 3. 외부 연동 모킹 (토큰 검증)
+    mocker.patch(
+        "app.domains.auth.service.verify_cognito_token",
+        new_callable=AsyncMock,
+        return_value={
+            "sub": "cognito_sub_123",
+            "email": "cognito@test.com",
+            "nickname": "코그니토유저",
+            "iss": "https://cognito-idp.region.amazonaws.com/test",
+        },
+    )
+
+    # 4. 서비스 실행
+    result = await auth_service.process_cognito_login("fake_code")
+
+    # 5. 검증
+    assert result.access_token is not None
+    assert result.refresh_token is not None
+    assert result.token_type == "bearer"

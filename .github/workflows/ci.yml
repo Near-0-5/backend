@@ -120,6 +120,12 @@ jobs:
       CALLBACK_REDIRECT_URL: ${{ secrets.CALLBACK_REDIRECT_URL }}
       CORS_ORIGINS: '${{ secrets.CORS_ORIGINS }}'
 
+      # AWS COGNITO
+      COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+      COGNITO_CLIENT_SECRET: ${{ secrets.COGNITO_CLIENT_SECRET }}
+      COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+      COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

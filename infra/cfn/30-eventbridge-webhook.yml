@@ -58,10 +58,14 @@ Resources:
     Properties:
       Name: near05-ivs-status-rule
       EventPattern:
+        detail-type:
+          - IVS Stream State Change
         source:
           - aws.ivs
-        detail-type:
-          - IVS Channel State Change
+        detail:
+          event_name:
+            - Stream Start
+            - Stream End
       State: ENABLED
       Targets:
         - Arn: !GetAtt MyApiDestination.Arn

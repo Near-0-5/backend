@@ -352,10 +352,28 @@ class StreamAdminService:
         """
         session = await self._get_session_with_channel_or_raise(session_id)
         channel = session.stream_channel
-        if not channel:
-            raise HTTPException(404, f"Channel {channel.id} not found")
 
         return self._map_to_session_response(session, channel)
+
+    async def delete_stream_channel(self, session_id: int, user: User) -> None:
+        """
+        [Admin] IVS 채널 삭제
+        """
+        session = await self._get_session_with_channel_or_raise(session_id)
+        channel = getattr(session, "stream_channel", None)
+
+        if not channel:
+            return
+
+        if channel.channel_arn:
+            try:
+                self.ivs_client.delete_channel(channel.channel_arn)
+            except Exception as e:
+                logger.warning(f"AWS Delete Fail (ARN: {channel.channel_arn}): {e}")
+        await channel.delete()
+
+        session.status = StreamStatus.READY
+        await session.save()
 
     async def delete_session_with_infrastructure(self, session_id: int, user: User) -> None:
         """

@@ -109,7 +109,7 @@ async def update_concert_session(
 )
 async def update_concert_channel_config(
     config: IVSUpdateConfig,
-    session_id: int = Path(..., description="수정할 세션 ID"),
+    session_id: int = Path(..., description="수정할 채널의 세션 ID"),
     current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> SessionResponse:
@@ -117,10 +117,24 @@ async def update_concert_channel_config(
 
 
 @router.delete(
+    "/sessions/{session_id}/channel",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="IVS 채널 삭제",
+    description="특정 AWS IVS 채널 리소스를 즉시 삭제",
+)
+async def delete_channel(
+    session_id: int = Path(..., description="삭제할 채널의 세션 ID"),
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> None:
+    return await service.delete_stream_channel(session_id, current_admin)
+
+
+@router.delete(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="콘서트 세션 및 인프라 삭제",
-    description="특정 세션을 삭제하고, 연결된 AWS IVS 채널 리소스를 즉시 삭제",
+    summary="콘서트 세션 삭제",
+    description="특정 세션을 삭제하고, 연결된 AWS IVS 채널 리소스가 있을 시 함께 삭제",
 )
 async def delete_concert_session(
     session_id: int = Path(..., description="삭제할 세션 ID"),

@@ -6,7 +6,6 @@ from fastapi import (
     Query,
     status,
 )
-from fastapi.templating import Jinja2Templates
 
 from app.api.deps import get_admin_user
 from app.domains.streams import deps as streams_deps
@@ -21,8 +20,6 @@ from app.domains.streams.admin.service import StreamAdminService
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/streams", tags=["스트리밍 관리"])
-templates = Jinja2Templates(directory="app/admin/templates")
-
 
 @router.post(
     "/concerts/{concert_id}/sessions",

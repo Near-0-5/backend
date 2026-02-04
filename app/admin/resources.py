@@ -232,14 +232,14 @@ class ConcertSessionAdmin(TortoiseModelAdmin):
         data = SessionCreateRequest(
             **parsed_payload,
             artist_ids=artist_ids,
-            channel_config=ChannelConfig(),
         )
 
         service = StreamAdminService(
             ivs_client=IVSClient(), playback_provider=IVSPlaybackProvider()
         )
-        session_res = await service.create_session_with_infrastructure(
-            concert_id, data, user=cast("User", None)
+        session_res = await service.create_session(concert_id, data, user=cast("User", None))
+        await service.provision_channel(
+            session_res.id, user=cast("User", None), config=ChannelConfig()
         )
 
         obj = await self.orm_get_obj(session_res.id)

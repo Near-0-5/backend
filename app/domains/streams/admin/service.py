@@ -276,8 +276,8 @@ class StreamAdminService:
             logger.exception("IVS Channel provisioning failed")
             raise HTTPException(500, "Failed to provision IVS Channel") from e
 
-    async def update_session_infrastructure(
-        self, session_id: int, data: SessionUpdateRequest, user: User
+    async def update_session(
+        self, session_id: int, data: SessionUpdateRequest, user: User | None
     ) -> SessionResponse:
         """
         [Admin] 콘서트 세션 수정
@@ -303,20 +303,30 @@ class StreamAdminService:
 
             await session.save()
 
-        # 인프라 설정 변경
-        if data.channel_config and channel:
-            self._update_ivs_channel_infra(session, channel, data.channel_config)
-
-            # DB 채널 상태 동기화
-            if data.channel_config.latency_mode:
-                channel.latency_mode = data.channel_config.latency_mode
-            if data.channel_config.channel_type:
-                channel.type = data.channel_config.channel_type
-            channel.is_private = session.access_level != AccessLevel.PUBLIC
-            await channel.save()
-
         if data.start_at and data.start_at != start_at_before:
             reschedule_session_notifications.delay(session.id)
+
+        return self._map_to_session_response(session, channel)
+
+    async def update_channel_config(
+        self, session_id: int, config: IVSUpdateConfig, user: User | None
+    ) -> SessionResponse:
+        """
+        [Admin] 콘서트 채널 수정
+        """
+        session = await self._get_session_with_channel_or_raise(session_id)
+        channel = session.stream_channel
+        # 인프라 설정 변경
+        if config and channel:
+            self._update_ivs_channel_infra(session, channel, config)
+
+            # DB 채널 상태 동기화
+            if config.latency_mode:
+                channel.latency_mode = config.latency_mode
+            if config.channel_type:
+                channel.type = config.channel_type
+            channel.is_private = session.access_level != AccessLevel.PUBLIC
+            await channel.save()
 
         return self._map_to_session_response(session, channel)
 

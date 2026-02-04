@@ -84,7 +84,6 @@ class SessionUpdateRequest(BaseModel):
     access_level: AccessLevel | None = None
     is_test: bool | None = None
     artist_ids: list[int] | None = None  # 라인업
-    channel_config: IVSUpdateConfig | None = None  # IVS  채널 수정
 
 
 # ==================== 응답 스키마 ====================

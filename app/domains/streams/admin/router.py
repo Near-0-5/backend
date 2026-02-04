@@ -40,7 +40,7 @@ async def create_concert_stream(
 
 
 @router.post(
-    "/concerts/{concert_id}/sessions/provision",
+    "/sessions/{session_id}",
     status_code=status.HTTP_201_CREATED,
     response_model=SessionResponse,
     summary="기존 세션에 AWS IVS 채널 발급",

@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.domains.concerts.models import CategoryType, Concert
-from app.domains.streams.admin.schemas import SessionUpdateRequest
+from app.domains.streams.admin.schemas import IVSUpdateConfig, SessionUpdateRequest
 from app.domains.streams.admin.service import StreamAdminService
 from app.domains.streams.models import (
     AccessLevel,
@@ -152,18 +152,25 @@ async def test_update_session_updates_db_and_calls_aws(
     data = SessionUpdateRequest(
         session_name="수정됨",
         access_level=AccessLevel.ADMIN_ONLY,
-        channel_config={"latencyMode": LatencyMode.NORMAL},
     )
 
-    res = await service.update_session_infrastructure(
+    res = await service.update_session(
         session_with_channel.id,
         data,
         admin_user,
     )
 
+    aws_data = IVSUpdateConfig(
+        latency_mode=LatencyMode.LOW,
+        type=ChannelType.STANDARD,
+    )
+
+    aws_res = await service.update_channel_config(session_with_channel.id, aws_data, admin_user)
+
     assert called.get("yes") is True
     assert res.session_name == "수정됨"
     assert res.access_level == AccessLevel.ADMIN_ONLY
+    assert aws_res.channel.latency_mode == LatencyMode.LOW
 
 
 @pytest.mark.asyncio

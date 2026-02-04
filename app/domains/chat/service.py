@@ -10,7 +10,7 @@ from pydantic_core import ValidationError
 from app.domains.chat.manager import ConnectionLimitError, ConnectionManager
 from app.domains.chat.repository import append_chat_message, get_recent_messages, rate_limit_ok
 from app.domains.chat.schemas import ClientMessage, ServerEvent
-from app.domains.streams.models import ConcertSession
+from app.domains.streams.models import ConcertSession, StreamChannel
 
 
 def now_iso() -> str:
@@ -45,8 +45,9 @@ class ChatService:
         except ValueError as err:
             raise InvalidRoomId("Invalid stream_id") from err
 
-        exists = await ConcertSession.exists(id=stream_id)
-        if not exists:
+        if not await ConcertSession.exists(id=stream_id):
+            raise StreamNotFound("stream not found")
+        if not await StreamChannel.exists(session_id=stream_id):
             raise StreamNotFound("stream not found")
 
         return str(stream_id)
@@ -62,6 +63,10 @@ class ChatService:
     async def handle_connection(self, ws: WebSocket, room_id: str, user_id: str) -> None:
         room_id = room_id.strip()
         user_id = user_id.strip()
+        if not await ConcertSession.exists(id=int(room_id)):
+            return
+        if not await StreamChannel.exists(session_id=int(room_id)):
+            return
 
         try:
             await self.manager.connect(room_id, ws)

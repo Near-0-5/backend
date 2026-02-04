@@ -89,21 +89,36 @@ def bypass_stream_key_crypto(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_create_session_with_infrastructure(admin_service, admin_user, concert):
+async def test_create_session(admin_service, admin_user, concert):
     req = SessionCreateRequest(
         session_name="라이브 세션",
         start_at=now_kst() + timedelta(hours=1),
         access_level=AccessLevel.PUBLIC,
-        channel_config=ChannelConfig(
-            latency_mode=LatencyMode.LOW,
-            type=ChannelType.STANDARD,
-        ),
     )
 
-    res = await admin_service.create_session_with_infrastructure(concert.id, req, admin_user)
+    res = await admin_service.create_session(concert.id, req, admin_user)
 
     assert res.session_name == "라이브 세션"
     assert res.status == StreamStatus.READY
+
+
+@pytest.mark.asyncio
+async def test_create_channel(admin_service, admin_user, concert):
+    session = await ConcertSession.create(
+        concert=concert,
+        session_name="채널 생성용 세션",
+        start_at=now_kst() + timedelta(hours=1),
+        access_level=AccessLevel.PUBLIC,
+        status=StreamStatus.READY,
+    )
+
+    config = ChannelConfig(
+        latency_mode=LatencyMode.LOW,
+        type=ChannelType.STANDARD,
+    )
+
+    res = await admin_service.provision_channel(session.id, admin_user, config)
+
     assert res.channel is not None
     assert res.channel.arn == "arn:ivs:test:channel/1"
     assert res.stream_key == "raw-stream-key"

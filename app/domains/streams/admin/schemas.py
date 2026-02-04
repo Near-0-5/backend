@@ -73,9 +73,6 @@ class SessionCreateRequest(BaseModel):
     # 검색/필터링을 위한 아티스트 연결
     artist_ids: list[int] = Field(default_factory=list, description="출연 아티스트 ID 목록")
 
-    # 채널 설정 (기본값 제공)
-    channel_config: ChannelConfig = Field(default_factory=ChannelConfig)
-
 
 class SessionUpdateRequest(BaseModel):
     """세션 수정 요청 스키마"""
@@ -87,7 +84,6 @@ class SessionUpdateRequest(BaseModel):
     access_level: AccessLevel | None = None
     is_test: bool | None = None
     artist_ids: list[int] | None = None  # 라인업
-    channel_config: IVSUpdateConfig | None = None  # IVS  채널 수정
 
 
 # ==================== 응답 스키마 ====================

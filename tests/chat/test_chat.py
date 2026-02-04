@@ -103,9 +103,15 @@ def override_ws_user():
 # ✅ stream 존재 검증을 통과시키기 (ConcertSession.exists 패치)
 @pytest.fixture()
 def patch_stream_exists_true():
-    with patch(
-        "app.domains.chat.service.ConcertSession.exists",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "app.domains.chat.service.ConcertSession.exists",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.domains.chat.service.StreamChannel.exists",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         yield
 

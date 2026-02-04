@@ -217,11 +217,11 @@ class StreamAdminService:
         )
 
     # ==============================================================================================
-    async def create_session_with_infrastructure(
+    async def create_session(
         self, concert_id: int, data: SessionCreateRequest, user: User | None = None
     ) -> SessionResponse:
         """
-        [Admin] 콘서트 세션 생성 및 AWS IVS 채널 자동 발급
+        [Admin] 콘서트 세션 생성 (channel은 none)
         """
         # 콘서트, 아티스트 검증
         concert = await self._get_concert_or_raise(concert_id)
@@ -235,9 +235,23 @@ class StreamAdminService:
             for artist in artists:
                 await ConcertArtist.create(session=session, artist=artist)
 
+        return self._map_to_session_response(session, channel=None)
+
+    async def provision_channel(
+        self, session_id: int, user: User | None, config: ChannelConfig
+    ) -> SessionResponse:
+        """
+        [Admin] 기존 세션에 AWS IVS 채널 발급
+        """
+        session = await self._get_session_with_channel_or_raise(session_id)
+
+        if session.stream_channel:
+            raise HTTPException(400, "Channel already exists for this session")
+
         created_arn = None
+
         try:
-            ivs_res = self._create_ivs_channel_infra(session, data.channel_config)
+            ivs_res = self._create_ivs_channel_infra(session, config)
             created_arn = ivs_res["channel"]["arn"]
             raw_key = ivs_res["streamKey"]["value"]
 
@@ -246,8 +260,8 @@ class StreamAdminService:
                 channel_arn=created_arn,
                 ingest_endpoint=ivs_res["channel"]["ingestEndpoint"],
                 playback_url=ivs_res["channel"]["playbackUrl"],
-                latency_mode=data.channel_config.latency_mode,
-                type=data.channel_config.channel_type,
+                latency_mode=config.latency_mode,
+                type=config.channel_type,
                 is_private=(session.access_level != AccessLevel.PUBLIC),
             )
             channel.set_stream_key(raw_key)
@@ -257,14 +271,10 @@ class StreamAdminService:
 
             return self._map_to_session_response(session, channel, raw_key)
 
-        except HTTPException:
-            await self._cleanup_on_failure(session.id, created_arn)
-            raise
-
-        except Exception as e:  # 그 외 에러
-            await self._cleanup_on_failure(session.id, created_arn)
-            logger.exception("Unexpected error during session creation")
-            raise HTTPException(500, "IVS Channel creation failed") from e
+        except Exception as e:
+            await self._cleanup_on_failure(session_id=None, channel_arn=created_arn)
+            logger.exception("IVS Channel provisioning failed")
+            raise HTTPException(500, "Failed to provision IVS Channel") from e
 
     async def update_session_infrastructure(
         self, session_id: int, data: SessionUpdateRequest, user: User

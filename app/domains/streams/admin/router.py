@@ -10,6 +10,7 @@ from fastapi import (
 from app.api.deps import get_admin_user
 from app.domains.streams import deps as streams_deps
 from app.domains.streams.admin.schemas import (
+    ChannelConfig,
     SessionCreateRequest,
     SessionListResponse,
     SessionResponse,
@@ -21,12 +22,13 @@ from app.domains.users.models import User
 
 router = APIRouter(prefix="/admin/streams", tags=["스트리밍 관리"])
 
+
 @router.post(
     "/concerts/{concert_id}/sessions",
     status_code=status.HTTP_201_CREATED,
-    summary="콘서트 세션 생성 - IVS 채널 자동 설정",
+    summary="콘서트 세션 생성",
     response_model=SessionResponse,
-    description="특정 콘서트의 회차를 생성하고, AWS IVS 채널 리소스를 자동으로 할당합니다.",
+    description="특정 콘서트의 회차를 생성합니다.",
 )
 async def create_concert_stream(
     concert_id: int = Path(..., description="콘서트 ID"),
@@ -34,12 +36,26 @@ async def create_concert_stream(
     current_admin: User = Depends(get_admin_user),
     service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
 ) -> SessionResponse:
+    return await service.create_session(concert_id, data, current_admin)
+
+
+@router.post(
+    "/concerts/{concert_id}/sessions/provision",
+    status_code=status.HTTP_201_CREATED,
+    response_model=SessionResponse,
+    summary="기존 세션에 AWS IVS 채널 발급",
+)
+async def provision_concert_stream(
+    session_id: int,
+    config: ChannelConfig,
+    current_admin: User = Depends(get_admin_user),
+    service: StreamAdminService = Depends(streams_deps.get_stream_admin_service),
+) -> SessionResponse:
     """
-    1. 콘서트 회차(Session) 레코드를 생성합니다.
-    2. AWS IVS `CreateChannel` API를 호출하여 송출/재생 엔드포인트를 확보합니다.
-    3. 발급된 스트림 키는 내부 보안 정책에 따라 암호화하여 저장합니다.
+    1. AWS IVS `CreateChannel` API를 호출하여 송출/재생 엔드포인트를 확보합니다.
+    2. 발급된 스트림 키는 내부 보안 정책에 따라 암호화하여 저장합니다.
     """
-    return await service.create_session_with_infrastructure(concert_id, data, current_admin)
+    return await service.provision_channel(session_id, current_admin, config)
 
 
 @router.get(

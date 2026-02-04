@@ -62,6 +62,8 @@ class ChatService:
     async def handle_connection(self, ws: WebSocket, room_id: str, user_id: str) -> None:
         room_id = room_id.strip()
         user_id = user_id.strip()
+        if not await ConcertSession.exists(id=int(room_id)):
+            return
 
         try:
             await self.manager.connect(room_id, ws)

@@ -51,9 +51,13 @@ class TestStreamRouter:
                     new_callable=AsyncMock,
                 ) as mock_create_concert,
                 patch(
-                    "app.domains.streams.admin.service.StreamAdminService.create_session_with_infrastructure",
+                    "app.domains.streams.admin.service.StreamAdminService.create_session",
                     new_callable=AsyncMock,
                 ) as mock_create_session,
+                patch(
+                    "app.domains.streams.admin.service.StreamAdminService.provision_channel",
+                    new_callable=AsyncMock,
+                ) as mock_provision_channel,
             ):
                 # concert mock
                 mock_concert = MagicMock(spec=Concert)
@@ -90,6 +94,26 @@ class TestStreamRouter:
                     access_level=AccessLevel.PUBLIC,
                     start_at=datetime.now(),
                     status=StreamStatus.READY,
+                )
+
+                # create session
+                res = await client.post(
+                    "/api/v1/admin/streams/concerts/1/sessions",
+                    json={
+                        "session_name": "Session 1",
+                        "access_level": "PUBLIC",
+                        "start_at": datetime.now().isoformat(),
+                        "artist_ids": [1, 2],
+                    },
+                )
+                assert res.status_code == 201
+
+                mock_provision_channel.return_value = SessionResponse(
+                    id=10,
+                    session_name="Session 1",
+                    access_level=AccessLevel.PUBLIC,
+                    start_at=datetime.now(),
+                    status=StreamStatus.READY,
                     channel=IVSChannelSummary(
                         arn="arn:test",
                         ingest_endpoint="rtmps://test",
@@ -100,23 +124,18 @@ class TestStreamRouter:
                     value="sk_test",
                 )
 
-                # create session
-                res = await client.post(
-                    "/api/v1/admin/streams/concerts/1/sessions",
+                # create channel
+                chan_res = await client.post(
+                    "/api/v1/admin/streams/sessions/10",
                     json={
-                        "session_name": "Session 1",
-                        "access_level": "PUBLIC",
-                        "start_at": datetime.now().isoformat(),
                         "channel_config": {
                             "latency_mode": "LOW",
                             "channel_type": "STANDARD",
                         },
-                        "artist_ids": [1, 2],
                     },
                 )
-
                 assert res.status_code == 201
-                assert res.json()["value"] == "sk_test"
+                assert chan_res.json()["value"] == "sk_test"
 
         finally:
             app.dependency_overrides.clear()

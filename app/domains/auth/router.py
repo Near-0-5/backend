@@ -94,7 +94,7 @@ async def social_login(
     return RedirectResponse(cognito_login_url)
 
 
-@router.get("cognito/callback", include_in_schema=False, summary="소셜 로그인 공용 콜백")
+@router.get("/callback", include_in_schema=False, summary="소셜 로그인 공용 콜백")
 async def social_callback(response: Response, code: str = Query(...)) -> RedirectResponse:
     """
     Cognito로부터 인가 코드를 받아 process_cognito_login을 실행합니다.

@@ -31,7 +31,9 @@ async def test_kakao_callback_endpoint(mocker):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # follow_redirects=False로 설정해야 302 응답 자체를 검증할 수 있습니다.
-        response = await ac.get("/api/v1/auth/callback?code=mock_code", follow_redirects=False)
+        response = await ac.get(
+            "/api/v1/auth/cognito/callback?code=mock_code", follow_redirects=False
+        )
 
     # 2. 검증: 302/307 리다이렉트 확인.
     assert response.status_code in [302, 307]
@@ -60,7 +62,7 @@ async def test_kakao_callback_logic(mocker):
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/api/v1/auth/callback?code=mock", follow_redirects=False)
+        response = await ac.get("/api/v1/auth/cognito/callback?code=mock", follow_redirects=False)
 
     assert response.status_code == 307
     assert "refresh_token=rt" in response.headers.get("set-cookie")
@@ -119,7 +121,9 @@ async def test_kakao_callback_cookie_logic_coverage(mocker):
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/api/v1/auth/callback?code=fake_code", follow_redirects=False)
+        response = await ac.get(
+            "/api/v1/auth/cognito/callback?code=fake_code", follow_redirects=False
+        )
 
     # 2. 검증: 상태 코드 확인
     assert response.status_code in [302, 307]

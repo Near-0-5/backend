@@ -1,11 +1,18 @@
 from enum import Enum
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
-from app.domains.artists.schemas import ArtistDetailResponse, ArtistListResponse
+from app.api.deps import get_current_user
+from app.domains.artists.schemas import (
+    ArtistDetailResponse,
+    ArtistListResponse,
+    ArtistRecommendationResponse,
+)
 from app.domains.artists.service import artist_service
+from app.domains.users.models import User
 
 router = APIRouter(prefix="/artists", tags=["artists"])
+recs_router = APIRouter(prefix="/recommendations", tags=["추천"])
 
 
 class ArtistSortOrder(str, Enum):
@@ -53,3 +60,22 @@ async def get_artist_detail(
     특정 아티스트의 상세 정보를 조회합니다.
     """
     return await artist_service.get_artist_detail(artist_id=artist_id)
+
+
+@recs_router.get(
+    "/artists", response_model=ArtistRecommendationResponse, summary="사용자 맞춤 아티스트 추천"
+)
+async def get_artist_recommendations(
+    current_user: User = Depends(get_current_user), limit: int = Query(10, ge=1, le=50)
+) -> ArtistRecommendationResponse:
+    """
+    로그인한 유저의 팔로우 목록을 기반으로 아티스트를 추천합니다.
+    캐시(Redis)가 존재하면 즉시 반환하고, 없으면 계산합니다.
+    """
+    # 서비스로부터 ArtistListElement 리스트를 받아옵니다.
+    items = await artist_service.get_personalized_recommendations(
+        user_id=current_user.id, limit=limit
+    )
+
+    # Response 객체로 감싸서 반환
+    return ArtistRecommendationResponse(recommended_artists=items)

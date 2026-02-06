@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.domains.artists.router import recs_router
 from app.domains.artists.router import router as artists_router
 from app.domains.auth.router import router as auth_router
 from app.domains.chat.router_ws import router as chat_router
@@ -16,6 +17,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(artists_router)
+api_router.include_router(recs_router)
 api_router.include_router(concert_admin_router)
 api_router.include_router(streams_router)
 api_router.include_router(streams_status_router)

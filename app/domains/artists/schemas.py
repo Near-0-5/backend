@@ -35,3 +35,13 @@ class ArtistDetailResponse(ArtistListElement):
     debut_date: date | None
     member_count: int | None
     group_type: GroupType | None
+
+
+class ArtistRecommendationElement(ArtistBase):
+    company: str | None = Field(None, alias="agency")
+    follower_count: int
+    recommendation_reason: str
+
+
+class ArtistRecommendationResponse(BaseModel):
+    recommended_artists: list[ArtistRecommendationElement]

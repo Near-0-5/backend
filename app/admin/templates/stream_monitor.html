@@ -41,7 +41,7 @@
 <body>
 <div class="header-bar">
     <div>
-        <h1>세션 모니터링 <small style="color:#888;">#{{ session_id }}</small></h1>
+        <h1> 모니터링 <small style="color:#888;">#{{ session_id }}</small><small id="session-name" style="color:#888;">  불러오는 중..</small></h1>
         <div id="concert-title" style="color:#58a6ff;font-weight:bold;margin-top:5px;">불러오는 중...</div>
     </div>
     <button class="primary" onclick="refreshData()">즉시 갱신</button>
@@ -162,7 +162,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
 
             document.getElementById("concert-title").innerText = data.concertTitle || "제목 없음";
-            document.getElementById("db-status").innerText = data.status;
+            document.getElementById("session-name").innerText = data.sessionName || "제목 없음";
+            document.getElementById("db-status").innerText = data.liveMetrics?.state || "";
             document.getElementById("endpoint").innerText = data.ingestInfo.ingestEndpoint;
             document.getElementById("key").innerText = data.ingestInfo.value;
             document.getElementById("play-url").innerText = data.playbackUrl;
@@ -190,7 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             let finalUrl = data.playbackUrl;
-            if (data.playbackToken) {
+            if (data.playbackToken && data.playbackToken !== "") {
                 finalUrl += `?token=${data.playbackToken}`;
                 tokenStatus.innerText = "🔒 PRIVATE";
                 tokenStatus.style.color = "#00e676";

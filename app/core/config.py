@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     IVS_WEBHOOK_SECRET: str
     ADMIN_IVS_PLAYBACK_TOKEN_EXPIRATION_SEC: int = 600  # 10 min
     IVS_PLAYBACK_TOKEN_EXPIRATION_SEC: int = 3600  # 60 min
+    CLOUDFRONT_DOMAIN: str = "https://d15qsadcdtxaqn.cloudfront.net"
 
     # AWS COGNITO
     COGNITO_CLIENT_ID: str

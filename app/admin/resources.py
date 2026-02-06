@@ -4,10 +4,14 @@ from typing import TYPE_CHECKING, Any, cast
 import bcrypt
 from fastadmin import TortoiseModelAdmin as _RuntimeTortoiseModelAdmin
 from fastadmin import display, register
+from fastadmin.settings import settings
 from fastapi import HTTPException
+from tortoise.functions import Count
 
 from app.admin.models import AdminUser
+from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist, Follow
+from app.domains.artists.schemas import ArtistFormSchema
 from app.domains.concerts.models import Concert
 from app.domains.notifications.models import ConcertNoti
 from app.domains.streams.admin.schemas import ChannelConfig, SessionCreateRequest
@@ -40,6 +44,7 @@ if TYPE_CHECKING:
         async def orm_get_obj(self, id: int) -> Any | None: ...
 
         async def serialize_obj(self, obj: Any, list_view: bool = False) -> dict[str, Any]: ...
+
 else:
     TortoiseModelAdmin = _RuntimeTortoiseModelAdmin
 
@@ -145,19 +150,98 @@ class UserDeleteLogAdmin(TortoiseModelAdmin):
 class ArtistAdmin(TortoiseModelAdmin):
     verbose_name = "아티스트"
     verbose_name_plural = _ko_plural(verbose_name)
+
     list_display = (
         "id",
+        "profile_image",
         "stage_name",
+        "agency",
+        "description",
+        "follower_count",
         "category_type",
         "group_type",
-        "debut_date",
         "created_at",
     )
     list_display_links = ("id", "stage_name")
+
+    form_schema = ArtistFormSchema
+
+    fields = (
+        "stage_name",
+        "agency",
+        "description",
+        "profile_img_url",
+        "debut_date",
+        "member_count",
+        "group_type",
+        "category_type",
+        "follower_count",
+    )
+    readonly_fields = ("id", "follower_count", "created_at", "updated_at")
     list_filter = ("category_type", "group_type")
     search_fields = ("stage_name", "agency")
-    search_help_text = "활동명/소속사 검색"
     ordering = ("-created_at",)
+
+    async def get_queryset(self, request: Any) -> Any:
+        return (
+            await cast("_RuntimeTortoiseModelAdmin", super())
+            .get_queryset(request)
+            .annotate(follower_count=Count("followers"))
+        )
+
+    @typed_display
+    def profile_image(self, obj: Artist) -> str:
+        if obj.profile_img_url:
+            cf_domain = getattr(
+                settings, "CLOUDFRONT_DOMAIN", "https://d15qsadcdtxaqn.cloudfront.net"
+            )
+            base_url = cf_domain.rstrip("/")
+            path = obj.profile_img_url.lstrip("/")
+            image_url = f"{base_url}/{path}"
+
+            # HTML이 렌더링되지 않으므로 단순 URL 문자열만 반환합니다.
+            return image_url
+
+        return "-"
+
+    @typed_display
+    def follower_count(self, obj: Any) -> int:
+        return getattr(obj, "follower_count", 0)
+
+    async def save_model(self, id: int | None, payload: dict[str, Any]) -> dict[str, Any] | None:
+        # payload["profile_img_url"]에 파일 객체가 들어옵니다.
+        file_obj = payload.get("profile_img_url")
+
+        if file_obj and not isinstance(file_obj, str):
+            resizer = ImageResizer()
+            target_id = id if id else "new"
+            path_prefix = f"artists/{target_id}/profile/"
+
+            # 기존 파일이 있다면
+            if id:
+                existing_obj = await Artist.get_or_none(id=id)
+                if existing_obj and existing_obj.profile_img_url:
+                    clean_s3_key = existing_obj.profile_img_url
+                    if clean_s3_key.startswith("/images/"):
+                        clean_s3_key = clean_s3_key.replace("/images/", "", 1)
+
+                    await resizer.delete_all_by_id_path(clean_s3_key)
+
+            uploaded_urls = await resizer.upload_square_resizes(
+                image_file=file_obj, sizes=(400,), path_prefix=path_prefix
+            )
+
+            if "400" in uploaded_urls:
+                from urllib.parse import urlparse
+
+                s3_full_url = uploaded_urls["400"]
+                pure_path = urlparse(s3_full_url).path.lstrip("/")
+
+                # 최종 DB 저장 형태: /images/artists/1/profile/image_400.png
+                payload["profile_img_url"] = f"/images/{pure_path}"
+
+        # 파일이 없고 기존 URL 문자열만 있다면 그대로 저장됩니다.
+        return await super().save_model(id, payload)
 
 
 @register(Follow)

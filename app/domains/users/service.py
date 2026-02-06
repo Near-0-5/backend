@@ -6,6 +6,7 @@ from fastapi import HTTPException, Response, UploadFile, status
 from tortoise.transactions import in_transaction
 
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist, Follow
 from app.domains.notifications.models import UserNoti
@@ -204,6 +205,9 @@ class UserService:
     async def add_follow_artist(
         self, user: User, data: FavoriteArtistCreate
     ) -> FavoriteArtistResponse:
+        """
+        사용자의 선호 아티스트를 추가합니다.
+        """
         # 아티스트 존재 여부 확인
         artist = await Artist.get_or_none(id=data.artist_id)
         if not artist:
@@ -216,6 +220,9 @@ class UserService:
         follow, created = await Follow.get_or_create(user=user, artist=artist)
         if not created:
             raise HTTPException(status_code=409, detail="이미 추가된 아티스트입니다.")
+
+        # 추천 아티스트 캐시 삭제
+        await redis_client.delete(f"user_recommendation:{user.id}")
 
         return FavoriteArtistResponse(
             user_id=user.id,
@@ -241,7 +248,9 @@ class UserService:
         # 팔로우 기록 삭제
         await follow.delete()
 
-        # 성공하면
+        # 추천 아티스트 캐시 삭제
+        await redis_client.delete(f"user_recommendation:{user.id}")
+
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

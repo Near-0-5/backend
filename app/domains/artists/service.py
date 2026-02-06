@@ -1,5 +1,6 @@
 import json
-from typing import Any, cast
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import HTTPException, status
 from tortoise.functions import Count
@@ -7,6 +8,10 @@ from tortoise.functions import Count
 from app.core.redis import redis_client
 from app.domains.artists.models import Artist, Follow
 from app.domains.artists.schemas import ArtistDetailResponse, ArtistListElement, ArtistListResponse
+
+# Ruff TC003: 타입 힌트용 임포트를 체크 블록으로 이동
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class ArtistService:
@@ -93,7 +98,7 @@ class ArtistService:
     async def _get_fallback_artists(
         self, limit: int, exclude_ids: list[int] | None = None
     ) -> list[Any]:
-        """최신 등록 순으로 아티스트를 가져오는 공통 로직 """
+        """최신 등록 순으로 아티스트를 가져오는 공통 로직"""
         query = Artist.all().annotate(follower_count=Count("followers"))
         if exclude_ids:
             query = query.filter(id__not_in=exclude_ids)
@@ -168,7 +173,10 @@ class ArtistService:
         if len(result) < limit:
             needed = limit - len(result)
             # 이미 포함된 아티스트와 내 팔로우 목록 제외
-            exclude = list(my_follows) + [item["id"] for item in result]
+            follow_ids = [int(f) for f in cast("Iterable[Any]", my_follows or [])]
+            result_ids = [int(item["id"]) for item in result]
+
+            exclude: list[int] = follow_ids + result_ids
             fallbacks = await self._get_fallback_artists(limit=needed, exclude_ids=exclude)
 
             result.extend(

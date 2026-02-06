@@ -17,7 +17,7 @@ async def ac():
 
 @pytest.mark.asyncio
 async def test_kakao_callback_endpoint(mocker):
-    """카카오 콜백 시 프론트엔드로 리다이렉트되는지 확인"""
+    """카카오 콜백 시 JSON 응답과 쿠키가 정상적으로 반환되는지 확인"""
     # 1. 서비스 로직 모킹
     mock_service = mocker.patch(
         "app.domains.auth.router.auth_service.process_cognito_login", new_callable=AsyncMock
@@ -30,18 +30,17 @@ async def test_kakao_callback_endpoint(mocker):
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # follow_redirects=False로 설정해야 302 응답 자체를 검증할 수 있습니다.
-        response = await ac.get(
-            "/api/v1/auth/cognito/callback?code=mock_code", follow_redirects=False
-        )
+        # 이제 리다이렉트가 아니므로 follow_redirects 옵션은 의미가 없지만 유지해도 무방합니다.
+        response = await ac.get("/api/v1/auth/cognito/callback?code=mock_code")
 
-    # 2. 검증: 302/307 리다이렉트 확인.
-    assert response.status_code in [302, 307]
+    # 2. 검증: 200 OK 확인
+    assert response.status_code == 200
 
-    # 3. 검증: Location 헤더에 토큰과 정보가 포함되어 있는지 확인
-    location = response.headers["location"]
-    assert "access_token=test_token" in location
-    assert "is_new_user=false" in location
+    # 3. 검증: 응답 바디(JSON)에 토큰 정보가 포함되어 있는지 확인
+    data = response.json()
+    assert data["access_token"] == "test_token"
+    assert data["is_new_user"] is False
+    assert data["token_type"] == "Bearer"
 
     # 4. 검증: 쿠키가 정상적으로 설정되었는지 확인
     set_cookies = response.headers.get_list("set-cookie")
@@ -51,22 +50,24 @@ async def test_kakao_callback_endpoint(mocker):
 
 @pytest.mark.asyncio
 async def test_kakao_callback_logic(mocker):
-    """router.py 56-64 라인 커버: 리다이렉트 및 쿠키 설정"""
-    from app.domains.auth.schemas import TokenResponse
-
+    """JSON 응답 및 바디 데이터 구조 검증"""
     mock_token = TokenResponse(
         access_token="at", refresh_token="rt", token_type="bearer", is_new_user=True
     )
     mocker.patch(
-        "app.domains.auth.router.auth_service.process_cognito_login", return_value=mock_token
+        "app.domains.auth.router.auth_service.process_cognito_login",
+        new_callable=AsyncMock,
+        return_value=mock_token,
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/api/v1/auth/cognito/callback?code=mock", follow_redirects=False)
+        response = await ac.get("/api/v1/auth/cognito/callback?code=mock")
 
-    assert response.status_code == 307
+    assert response.status_code == 200
+    data = response.json()
+    assert data["access_token"] == "at"
+    assert data["is_new_user"] is True
     assert "refresh_token=rt" in response.headers.get("set-cookie")
-    assert "is_new_user=true" in response.headers.get("location")
 
 
 @pytest.mark.asyncio
@@ -105,15 +106,11 @@ async def test_admin_login_endpoint_coverage(initialize_tests):
 
 @pytest.mark.asyncio
 async def test_kakao_callback_cookie_logic_coverage(mocker):
-    """router.py: 콜백 시 리다이렉트 및 쿠키 설정 상세 커버"""
-    from app.domains.auth.schemas import TokenResponse
-
-    # 1. 반환값 설정
+    """쿠키의 상세 옵션(Secure, SameSite, HttpOnly) 검증"""
     mock_token = TokenResponse(
         access_token="at", refresh_token="rt", token_type="bearer", is_new_user=True
     )
 
-    # 서비스 메서드 모킹
     mocker.patch(
         "app.domains.auth.router.auth_service.process_cognito_login",
         new_callable=AsyncMock,
@@ -121,25 +118,22 @@ async def test_kakao_callback_cookie_logic_coverage(mocker):
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get(
-            "/api/v1/auth/cognito/callback?code=fake_code", follow_redirects=False
-        )
+        response = await ac.get("/api/v1/auth/cognito/callback?code=fake_code")
 
-    # 2. 검증: 상태 코드 확인
-    assert response.status_code in [302, 307]
+    # 1. 상태 코드 확인
+    assert response.status_code == 200
 
-    # 3. 쿠키 설정 확인
-    set_cookie = response.headers.get("set-cookie", "").lower()  # 전체 소문자 변환
+    # 2. 쿠키 상세 설정 확인
+    set_cookie = response.headers.get("set-cookie", "").lower()
     assert "refresh_token=rt" in set_cookie
-    # 'HttpOnly' 대신 소문자 'httponly'로 검증
     assert "httponly" in set_cookie
     assert "samesite=none" in set_cookie
     assert "secure" in set_cookie
 
-    # 4. 리다이렉트 URL 파라미터 확인
-    location = response.headers.get("location", "")
-    assert "is_new_user=true" in location
-    assert "access_token=at" in location
+    # 3. 바디 데이터 확인 (기존 Location 헤더 검증 제거)
+    data = response.json()
+    assert data["access_token"] == "at"
+    assert data["is_new_user"] is True
 
 
 @pytest.mark.asyncio

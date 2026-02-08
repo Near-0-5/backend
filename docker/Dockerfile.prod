@@ -1,5 +1,8 @@
 FROM python:3.13-slim
 
+# AWS Lambda Web Adapter 추가
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
 # 빌드/런타임에 필요한 시스템 패키지
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -20,6 +23,9 @@ RUN uv sync --locked --no-dev --no-install-project
 # 소스 복사
 COPY . .
 
+# Lambda 환경을 위한 Readiness Check 및 포트 설정
+ENV PORT=8000
+ENV AWS_LWA_READINESS_CHECK_PATH=/health
 EXPOSE 8000
 
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

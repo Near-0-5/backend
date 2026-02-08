@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # REDIS 설정
     REDIS_HOST: str
     REDIS_PORT: str
+    REDIS_PROTOCOL: str = "redis"
 
     AUTO_SCHEMA: str = "0"  # 개발 초기에만 1로 켜서 generate_schemas를 쓰는 경우에 사용
 
@@ -100,7 +101,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def REDIS_URL(self) -> str:
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+        return f"{self.REDIS_PROTOCOL}://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
     @property
     def IVS_PLAYBACK_PRIVATE_KEY(self) -> str:

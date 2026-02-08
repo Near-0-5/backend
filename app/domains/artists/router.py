@@ -1,6 +1,6 @@
 from enum import Enum
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.api.deps import get_current_user
 from app.domains.artists.schemas import (
@@ -79,3 +79,30 @@ async def get_artist_recommendations(
 
     # Response 객체로 감싸서 반환
     return ArtistRecommendationResponse(recommended_artists=items)
+
+
+@router.patch(
+    "/{artist_id}/profile-image",
+    summary="아티스트 프로필 이미지 단독 업로드",
+    description="특정 아티스트의 프로필 이미지만 별도로 등록하거나 수정합니다. (슈퍼유저 전용)",
+    status_code=status.HTTP_200_OK,
+)
+async def upload_artist_profile_image(
+    artist_id: int,
+    image_file: UploadFile = File(..., description="업로드할 이미지 파일"),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """
+    아티스트 프로필 이미지를 업로드하고 업데이트된 경로를 반환합니다.
+    """
+    # 슈퍼유저 권한 체크
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="아티스트 이미지를 변경할 권한이 없습니다.",
+        )
+
+    updated_path = await artist_service.update_artist_profile_image(
+        artist_id=artist_id, image_file=image_file
+    )
+    return {"profile_img_url": updated_path}

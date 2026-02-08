@@ -26,6 +26,11 @@ COPY . .
 # Lambda 환경을 위한 Readiness Check 및 포트 설정
 ENV PORT=8000
 ENV AWS_LWA_READINESS_CHECK_PATH=/health
+# uv가 런타임에 작동하지 못하도록 환경 변수 고정
+ENV UV_NO_SYNC=true
+ENV UV_PROJECT_ENVIRONMENT=/usr/local
+
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# uv run 대신 uvicorn을 직접 호출
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

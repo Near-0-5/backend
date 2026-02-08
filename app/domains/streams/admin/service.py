@@ -388,7 +388,7 @@ class StreamAdminService:
             except Exception as e:
                 logger.warning(f"AWS Delete Fail: {e}")
 
-            await session.delete()
+        await session.delete()
 
     async def stop_stream_session(self, session_id: int, user: User) -> None:
         """

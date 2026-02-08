@@ -1,5 +1,7 @@
+import datetime
 from datetime import date
 
+from fastapi import UploadFile
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.domains.artists.models import GroupType
@@ -45,3 +47,18 @@ class ArtistRecommendationElement(ArtistBase):
 
 class ArtistRecommendationResponse(BaseModel):
     recommended_artists: list[ArtistRecommendationElement]
+
+
+class ArtistFormSchema(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    stage_name: str | None = Field(None, title="활동명")
+    agency: str | None = Field(None, title="소속사")
+    description: str | None = Field(None, title="소개")
+    profile_img_url: UploadFile | None = Field(
+        None, title="프로필 이미지", json_schema_extra={"widget": "upload", "form_widget": "upload"}
+    )
+    debut_date: datetime.date | None = Field(None, title="데뷔일")
+    member_count: int | None = Field(0, title="멤버 수")
+    group_type: str | None = Field(None, title="그룹형태")
+    category_type: str | None = Field(None, title="카테고리")

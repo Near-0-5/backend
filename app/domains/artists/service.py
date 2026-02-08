@@ -1,11 +1,14 @@
 import json
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlparse
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from tortoise.functions import Count
 
+from app.core.config import settings
 from app.core.redis import redis_client
+from app.core.utils.image_resizer import ImageResizer
 from app.domains.artists.models import Artist, Follow
 from app.domains.artists.schemas import ArtistDetailResponse, ArtistListElement, ArtistListResponse
 
@@ -15,6 +18,23 @@ if TYPE_CHECKING:
 
 
 class ArtistService:
+    def _get_full_image_url(self, path: str | None) -> str:
+        """
+        DB에 저장된 경로를 확인하여 전체 URL을 반환합니다.
+        이미 https://로 시작하면 그대로 반환하고, 아니면 CloudFront 도메인을 붙입니다.
+        """
+        if not path:
+            return ""
+
+        # 이미 전체 URL(https://)이 저장되어 있는 경우 그대로 반환
+        if path.startswith("https://"):
+            return path
+
+        # 상대 경로인 경우 CloudFront 도메인 결합
+        base_url = settings.CLOUDFRONT_DOMAIN.rstrip("/")
+        clean_path = path.lstrip("/")
+        return f"{base_url}/{clean_path}"
+
     async def get_artists(
         self,
         page: int,
@@ -60,7 +80,7 @@ class ArtistService:
             ArtistListElement(
                 id=artist.id,
                 name=artist.stage_name,  # ERD의 stage_name을 그룹명으로 사용
-                profile_image=artist.profile_img_url or "",
+                profile_image=self._get_full_image_url(artist.profile_img_url),
                 company=artist.agency,
                 description=artist.description,
                 follower_count=getattr(artist, "follower_count", 0),
@@ -85,7 +105,7 @@ class ArtistService:
         return ArtistDetailResponse(
             id=artist.id,
             name=artist.stage_name,  #
-            profile_image=artist.profile_img_url,  #
+            profile_image=self._get_full_image_url(artist.profile_img_url),
             company=artist.agency,  #
             description=artist.description,  #
             category=artist.category_type,  #
@@ -162,7 +182,7 @@ class ArtistService:
             {
                 "id": recs.id,
                 "name": recs.stage_name,
-                "profile_image": recs.profile_img_url or "",
+                "profile_image": self._get_full_image_url(recs.profile_img_url),
                 "company": recs.agency or "",
                 "follower_count": getattr(recs, "follower_count", 0),
                 "recommendation_reason": reason,
@@ -202,6 +222,51 @@ class ArtistService:
             )
 
         return result
+
+    async def update_artist_profile_image(self, artist_id: int, image_file: UploadFile) -> str:
+        """
+        특정 아티스트의 프로필 이미지를 업로드하고 경로를 업데이트합니다.
+        """
+        artist = await Artist.get_or_none(id=artist_id)
+        if not artist:
+            raise HTTPException(status_code=404, detail="아티스트를 찾을 수 없습니다.")
+
+        resizer = ImageResizer()
+        path_prefix = f"artists/{artist_id}/profile/"
+
+        # 기존 이미지가 있다면 S3에서 삭제
+        if artist.profile_img_url:
+            clean_s3_key = artist.profile_img_url
+            # 상대 경로(/images/...)인 경우 프리픽스 제거 후 삭제
+            if clean_s3_key.startswith("/images/"):
+                clean_s3_key = clean_s3_key.replace("/images/", "", 1)
+            # 전체 URL(https://...)인 경우 S3 키만 추출하여 삭제
+            elif clean_s3_key.startswith("https://"):
+                clean_s3_key = urlparse(clean_s3_key).path.lstrip("/")
+                # 만약 전체 URL 경로에도 /images/가 포함되어 있다면 제거
+                if clean_s3_key.startswith("images/"):
+                    clean_s3_key = clean_s3_key.replace("images/", "", 1)
+
+            await resizer.delete_all_by_id_path(clean_s3_key)
+
+        # 새 이미지 리사이징 및 업로드 (400px 기준)
+        uploaded_urls = await resizer.upload_square_resizes(
+            image_file=image_file.file, sizes=(400,), path_prefix=path_prefix
+        )
+
+        if "400" not in uploaded_urls:
+            raise HTTPException(status_code=500, detail="이미지 업로드에 실패했습니다.")
+
+        # DB 저장용 경로 생성 (/images/ 프리픽스 추가)
+        s3_url = uploaded_urls["400"]
+        pure_path = urlparse(s3_url).path.lstrip("/")
+        db_path = f"/images/{pure_path}"
+
+        # DB 업데이트
+        artist.profile_img_url = db_path
+        await artist.save(update_fields=["profile_img_url"])
+
+        return self._get_full_image_url(db_path)
 
 
 artist_service = ArtistService()

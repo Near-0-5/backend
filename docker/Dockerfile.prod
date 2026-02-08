@@ -35,5 +35,5 @@ ENV UV_PROJECT_ENVIRONMENT=/usr/local
 
 EXPOSE 8000
 
-# uv run 대신 uvicorn을 직접 호출
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# uv run 으로 원복(5a555)
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

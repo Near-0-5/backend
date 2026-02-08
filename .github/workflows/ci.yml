@@ -93,6 +93,7 @@ jobs:
 
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PROTOCOL: redis
 
       STREAM_KEY_ENCRYPTION_KEY: ${{ secrets.STREAM_KEY_ENCRYPTION_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

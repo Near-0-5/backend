@@ -440,7 +440,7 @@
 </div>
 
 <br>
----
+
 
 ### 📋 Documents
 
@@ -448,8 +448,8 @@
 > 
 > [ 🪄 API 명세서 ]()
 >
-> [ 🔦 테이블 명세서 ]()
+> [ 🔦 테이블 명세서 ](https://docs.google.com/spreadsheets/d/1iEfYEoJ2bvwK7Y4hxYSGdjEHwURjBNlMzPs_CMq_oz0/edit?gid=828450349#gid=828450349)
 >
-> [ 🪢 ERD ]()
+> [ 🪢 ERD ](https://dbdiagram.io/d/Copy-of-Untitled-Diagram-6971c92ebd82f5fce23ec02d)
 > 
-> <a href="" target="_blanck"><img width="2677" height="1964" alt="Near05" src="" /></a>
+

@@ -100,7 +100,7 @@ class Settings(BaseSettings):
 
         # DB_HOST 주소에 'amazonaws.com'이 포함되어 있다면 (즉, RDS라면) SSL 옵션 추가
         if "amazonaws.com" in self.DB_HOST:
-            url += "?ssl=insecure"
+            url += "?sslmode=require"
         return url
 
     @computed_field  # type: ignore[prop-decorator]

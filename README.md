@@ -107,15 +107,17 @@
 
 <details> <summary><strong>👀 사용자 기능 (User) </strong></summary>
 
-- 뭐라도
-- 적어주세요
+- 스트리밍 채팅방 입장 (`/streaming/{stream_id}/chat`)
+- 최근 메시지 50개 수신 후 실시간 메시지 송수신
+- 시스템 메시지 수신 (입장 안내, 무응답 타임아웃, 레이트 리밋)
+- 메시지 레이트 리밋: 2초에 1개
+- 무응답(Idle) 30분 시 연결 종료
 </details>
 
 <details>
 <summary><strong>🛠 관리자 기능 (Admin)</strong></summary>
 
-- 뭐라도
-- 적어주세요
+- 별도 관리자 기능 없음
 
 </details>
 
@@ -150,15 +152,17 @@
 
 <details> <summary><strong>👀 사용자 기능 (User) </strong></summary>
 
-- 뭐라도
-- 적어주세요
+- 알림 목록 조회 (상태 필터, 페이지네이션)
+- 알림 삭제
+- 알림 설정 조회/변경 (아티스트/라이브/마케팅)
+- 실시간 알림 수신 (WebSocket)
+- 알림 타입: DAY_BEFORE / HOUR_1 / MIN_30 / START
 </details>
 
 <details>
 <summary><strong>🛠 관리자 기능 (Admin)</strong></summary>
 
-- 뭐라도
-- 적어주세요
+- 운영 배치(Celery)로 알림 스케줄 생성/재스케줄/발송
 
 </details>
 

@@ -86,16 +86,19 @@
 
 <details> <summary><strong>👀 사용자 기능 (User) </strong></summary>
 
-- 뭐라도
-- 적어주세요
+- 라이브 시청: 저지연(Low-Latency) 기술이 적용된 실시간 공연 시청
+- VOD 다시보기: 종료된 공연의 녹화본 시청 및 타임라인 탐색
+- 공연 정보 확인: 실시간 공연 정보, 아티스트 정보 및 스트리밍 상태 확인
 
 </details>
 
 <details>
 <summary><strong>🛠 관리자 기능 (Admin)</strong></summary>
 
-- 뭐라도
-- 적어주세요
+- 스트리밍 세션 관리: 라이브 채널 생성, 스트림 키 발급 및 세션 종료 제어 
+- 공연 회차 관리: 공연 스케줄링 및 회차별 스트리밍 매핑 
+- 녹화물 관리: IVS 자동 녹화 설정 및 S3 저장소 연동 관리
+- 상태 모니터링: IVS Webhook을 통한 스트림 상태(Live/Offline) 실시간 동기화
 </details>
 
 

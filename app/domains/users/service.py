@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from typing import cast
+from urllib.parse import urlparse
 
 import boto3
 from fastapi import HTTPException, Response, UploadFile, status
@@ -131,8 +132,12 @@ class UserService:
         )
 
         # DB 업데이트 (예: 중간 사이즈인 300px을 기본 URL로 저장)
-        img_url = urls.get("300")
-        user.profile_img_url = img_url if img_url else ""
+        img_url_300 = urls.get("300")
+        if img_url_300:
+            pure_path = urlparse(img_url_300).path.lstrip("/")
+            user.profile_img_url = f"/images/{pure_path}"
+        else:
+            user.profile_img_url = ""
 
         return user
 

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
+from PIL import Image
 
 from app.domains.artists.models import Artist
 from app.domains.concerts.models import CategoryType
@@ -81,8 +82,6 @@ async def test_image_resizer_and_s3_error_cases(initialize_tests):
 async def test_update_profile_image_coverage(initialize_tests):
     user = await User.create(nickname="img_test", provider=ProviderChoice.KAKAO, provider_id="p123")
 
-    from PIL import Image
-
     img = Image.new("RGB", (10, 10), color="red")
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format="PNG")
@@ -95,16 +94,23 @@ async def test_update_profile_image_coverage(initialize_tests):
 
     with (
         patch(
-            "app.integrations.s3_client.S3Client.upload_with_key", new_callable=AsyncMock
-        ) as mock_s3_upload,
-        patch("app.integrations.s3_client.S3Client.build_url") as mock_build_url,
+            "app.core.utils.image_resizer.ImageResizer.upload_square_resizes",
+            new_callable=AsyncMock,
+        ) as mock_upload,
     ):
-        mock_s3_upload.return_value = "users/1/profile/profile200.png"
-        mock_build_url.return_value = "http://s3.url/200.png"
+        # 1. ImageResizer가 반환하는 가상의 S3 Full URL 설정
+        mock_upload.return_value = {
+            "300": "https://near-images.s3.ap-northeast-2.amazonaws.com/users/1/profile/image_300.png"
+        }
 
+        # 2. 서비스 함수 호출
         await user_service.update_profile_image(user, mock_file)
+
+        # 3. DB 확인
         await user.refresh_from_db()
-        assert user.profile_img_url == "http://s3.url/200.png"
+
+        # [검증 포인트] DB에는 도메인이 제거되고 /images/ 프리픽스가 붙은 경로가 저장되어야 함
+        assert user.profile_img_url == "/images/users/1/profile/image_300.png"
 
 
 @pytest.mark.asyncio

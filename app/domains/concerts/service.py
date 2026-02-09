@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException, UploadFile
 
+from app.core.config import settings
 from app.core.pagination import paginate_cursor
 from app.core.utils.image_resizer import ImageResizer
 from app.core.utils.permissions import AdminPermission
@@ -14,7 +15,6 @@ from app.domains.concerts.schemas import (
 from app.domains.users.models import User
 from app.integrations.aws_ivs import IVSClient
 from app.integrations.aws_ivs.client import logger
-from app.core.config import settings
 
 
 class ConcertAdminService:
@@ -71,9 +71,8 @@ class ConcertAdminService:
             image_file=file.file, sizes=sizes, path_prefix=path_prefix
         )
 
-
         # DB 업데이트
-        img_url = urls.get("640")
+        img_url = urls.get("640", "")
         pure_path = urlparse(img_url).path.lstrip("/")
         db_path = f"/images/{pure_path}"
 

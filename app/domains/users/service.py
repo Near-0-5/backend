@@ -25,6 +25,20 @@ class UserService:
     def __init__(self) -> None:
         self.image_resizer = ImageResizer()
 
+    def _get_full_image_url(self, path: str | None) -> str:
+        """
+        ArtistService와 동일하게 DB의 상대 경로에 CloudFront 도메인을 결합합니다.
+        """
+        if not path:
+            return ""
+
+        if path.startswith("https://"):
+            return path
+
+        base_url = settings.CLOUDFRONT_DOMAIN.rstrip("/")
+        clean_path = path.lstrip("/")
+        return f"{base_url}/{clean_path}"
+
     async def get_user_profile(self, user_id: int) -> UserMeResponse:
         """
         사용자의 상세 프로필 정보를 조회합니다.
@@ -190,7 +204,7 @@ class UserService:
             FavoriteArtistItem(
                 id=record.artist.id,
                 name=record.artist.stage_name,
-                profile_img=record.artist.profile_img_url,
+                profile_img_url=self._get_full_image_url(record.artist.profile_img_url),
                 category_type=record.artist.category_type,
                 group_type=record.artist.group_type,
                 member_count=record.artist.member_count,
@@ -228,7 +242,9 @@ class UserService:
             user_id=user.id,
             artist_id=artist.id,
             artist_name=artist.stage_name,  # Artist 모델의 stage_name 사용
-            profile_img_url=artist.profile_img_url,  # alias 설정에 따라 매핑
+            profile_img_url=self._get_full_image_url(
+                artist.profile_img_url
+            ),  # alias 설정에 따라 매핑
             created_at=follow.created_at,  # Follow 모델의 생성일
         )
 

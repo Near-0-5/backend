@@ -2,7 +2,7 @@ import secrets
 from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api.deps import get_current_user_from_refresh_cookie, logger  # 유저 인증 의존성
 from app.core.config import settings
@@ -95,23 +95,23 @@ async def social_login(
 
 
 @router.get("/cognito/callback", include_in_schema=False, summary="소셜 로그인 공용 콜백")
-async def social_callback(response: Response, code: str = Query(...)) -> RedirectResponse:
+async def social_callback(response: Response, code: str = Query(...)) -> JSONResponse:
     """
     Cognito로부터 인가 코드를 받아 process_cognito_login을 실행합니다.
-    사용자가 직접 호출할 필요가 없으므로 API 문서에서 제외합니다.
+    Access Token은 바디에, Refresh Token은 쿠키에 담아 반환합니다.
     """
     token_data = await auth_service.process_cognito_login(code)
 
     # 화면으로 보낼 redirect url 구성 및 응답할 RedirectResponse 설정
-    redirect_url = (
-        f"{settings.CALLBACK_REDIRECT_URL}"
-        f"?access_token={token_data.access_token}"
-        f"&is_new_user={str(token_data.is_new_user).lower()}"
-    )
-    redirect_response = RedirectResponse(url=redirect_url)
+    content = {
+        "access_token": token_data.access_token,
+        "is_new_user": token_data.is_new_user,
+        "token_type": "Bearer",
+    }
+    response = JSONResponse(content=content, status_code=status.HTTP_200_OK)
 
     # Refresh Token을 HttpOnly 쿠키에 설정
-    redirect_response.set_cookie(
+    response.set_cookie(
         key="refresh_token",
         value=token_data.refresh_token,
         httponly=True,
@@ -121,7 +121,7 @@ async def social_callback(response: Response, code: str = Query(...)) -> Redirec
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,  # 7 * 24 * 60* 60
     )
 
-    return redirect_response
+    return response
 
 
 @router.get("/naver/callback", include_in_schema=False, summary="네이버 로그인 공용 콜백")

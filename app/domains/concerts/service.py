@@ -1,4 +1,5 @@
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, UploadFile
 
@@ -13,6 +14,7 @@ from app.domains.concerts.schemas import (
 from app.domains.users.models import User
 from app.integrations.aws_ivs import IVSClient
 from app.integrations.aws_ivs.client import logger
+from app.core.config import settings
 
 
 class ConcertAdminService:
@@ -26,6 +28,23 @@ class ConcertAdminService:
         """
         AdminPermission.must_be_admin(user)
         return await Concert.create(**data.model_dump())
+
+    def _get_full_image_url(self, path: str | None) -> str:
+        """
+        DB에 저장된 경로를 확인하여 전체 URL을 반환합니다.
+        이미 https://로 시작하면 그대로 반환하고, 아니면 CloudFront 도메인을 붙입니다.
+        """
+        if not path:
+            return ""
+
+        # 이미 전체 URL(https://)이 저장되어 있는 경우 그대로 반환
+        if path.startswith("https://"):
+            return path
+
+        # 상대 경로인 경우 CloudFront 도메인 결합
+        base_url = settings.CLOUDFRONT_DOMAIN.rstrip("/")
+        clean_path = path.lstrip("/")
+        return f"{base_url}/{clean_path}"
 
     async def update_concert_thumbnail(
         self, concert_id: int, file: UploadFile, user: User
@@ -52,9 +71,14 @@ class ConcertAdminService:
             image_file=file.file, sizes=sizes, path_prefix=path_prefix
         )
 
+
         # DB 업데이트
         img_url = urls.get("640")
-        concert.thumbnail_url = img_url if img_url else ""
+        pure_path = urlparse(img_url).path.lstrip("/")
+        db_path = f"/images/{pure_path}"
+
+        full_url = self._get_full_image_url(db_path)
+        concert.thumbnail_url = full_url
         await concert.save()
 
         return concert

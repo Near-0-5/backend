@@ -96,7 +96,12 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def DATABASE_URL(self) -> str:
-        return f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?ssl=insecure"
+        url = f"{self.DB_SCHEME}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+        # DB_HOST 주소에 'amazonaws.com'이 포함되어 있다면 (즉, RDS라면) SSL 옵션 추가
+        if "amazonaws.com" in self.DB_HOST:
+            url += "?ssl=insecure"
+        return url
 
     @computed_field  # type: ignore[prop-decorator]
     @property
